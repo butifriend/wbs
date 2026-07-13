@@ -1,0 +1,16 @@
+# Claude Code local tool config (per-machine, not needed by teammates)
+.claude/
+
+# OS junk files
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Original planning document (internal, not meant for the shared repo)
+*.pdf
+
+# Personal snapshot exports (use "JSON 백업/wbs-data.json" for team sync instead)
+*.xlsx
+*.csv
+wbs_*.json
+

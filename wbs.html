@@ -1,0 +1,1088 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WBS 일정 관리</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --panel:#ffffff; --border:#dde3ea; --text:#1f2937; --sub:#6b7280;
+    --accent:#2f6fed; --accent-dark:#1f4fb8; --group-bg:#2f6fed; --group-text:#ffffff;
+    --danger:#e5484d; --danger-bg:#fdeaea;
+    --st-done:#3b6fd6; --st-done-bg:#e8eefc;
+    --st-progress:#d99a1b; --st-progress-bg:#fdf2dc;
+    --st-hold:#d1453b; --st-hold-bg:#fbe7e6;
+    --st-plan:#6b7280; --st-plan-bg:#eef0f2;
+    --shadow: 0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14161a; --panel:#1c1f26; --border:#2b2f38; --text:#e6e9ee; --sub:#98a2b3;
+      --accent:#5b8def; --accent-dark:#4874c9; --group-bg:#2a4a8f; --group-text:#eaf0ff;
+      --danger:#f0605f; --danger-bg:#3a2222;
+      --st-done:#6f9bef; --st-done-bg:#1c2b4a;
+      --st-progress:#e0ad4b; --st-progress-bg:#3a2f16;
+      --st-hold:#e5716c; --st-hold-bg:#3a2020;
+      --st-plan:#98a2b3; --st-plan-bg:#262a31;
+      --shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    font-size:14px;
+  }
+  .wrap{max-width:1500px; margin:0 auto; padding:24px 20px 80px;}
+  h1{font-size:22px; margin:0 0 4px;}
+  .desc{color:var(--sub); font-size:13px; margin:0 0 20px; line-height:1.6;}
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:16px; margin-bottom:16px;}
+  .toolbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px;}
+  button{
+    font:inherit; cursor:pointer; border:1px solid var(--border); background:var(--panel); color:var(--text);
+    padding:7px 12px; border-radius:8px; transition:background .15s, border-color .15s;
+  }
+  button:hover{border-color:var(--accent); color:var(--accent);}
+  button.primary{background:var(--accent); color:#fff; border-color:var(--accent);}
+  button.primary:hover{background:var(--accent-dark); border-color:var(--accent-dark); color:#fff;}
+  button.danger{color:var(--danger); border-color:var(--danger-bg);}
+  button.danger:hover{background:var(--danger-bg); border-color:var(--danger);}
+  button.small{padding:3px 8px; font-size:12px; border-radius:6px; white-space:nowrap; flex:0 0 auto;}
+  .spacer{flex:1;}
+
+  .summary{display:flex; flex-wrap:wrap; gap:10px 24px; font-size:13px;}
+  .summary .item b{display:block; font-size:16px; margin-top:2px;}
+  .chip{display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:600;}
+  .chip.done{color:var(--st-done); background:var(--st-done-bg);}
+  .chip.progress{color:var(--st-progress); background:var(--st-progress-bg);}
+  .chip.hold{color:var(--st-hold); background:var(--st-hold-bg);}
+  .chip.plan{color:var(--st-plan); background:var(--st-plan-bg);}
+
+  table{width:100%; min-width:1294px; border-collapse:collapse; table-layout:fixed;}
+  col.c-no{width:56px;} col.c-cat{width:90px;} col.c-detail{width:auto;}
+  col.c-assignee{width:156px;} col.c-md{width:70px;} col.c-date{width:178px;} col.c-date-end{width:200px;}
+  col.c-status{width:96px;} col.c-actions{width:120px;}
+  thead th{
+    background:var(--bg); color:var(--sub); font-size:12px; font-weight:700; text-align:left;
+    padding:9px 8px; border-bottom:2px solid var(--border); position:sticky; top:0;
+  }
+  thead th.col-md{text-align:center;}
+  tbody td{padding:5px 8px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  tbody td.col-md{text-align:center;}
+  input[type=number]{text-align:center; padding-left:2px; padding-right:0;}
+  tr.group-row td{background:var(--group-bg); color:var(--group-text); font-weight:700; padding:5px 8px;}
+  tr.group-row input{background:transparent; color:var(--group-text); font-weight:700;}
+  tr.group-row input::placeholder{color:rgba(255,255,255,.7);}
+  tr.group-row input:focus{color:var(--text);}
+  tr.task-row:hover td{background:rgba(47,111,237,.05);}
+  input[type=text], input[type=number], input[type=date], select{
+    width:100%; padding:5px 6px; border:1px solid transparent; border-radius:6px;
+    background:transparent; color:inherit; font:inherit;
+  }
+  input[type=text]:hover, input[type=number]:hover, input[type=date]:hover, select:hover{border-color:var(--border);}
+  input[type=text]:focus, input[type=number]:focus, input[type=date]:focus, select:focus{
+    outline:none; border-color:var(--accent); background:var(--panel);
+  }
+  .cell-inner{display:flex; align-items:center; gap:4px; overflow:hidden; width:100%;}
+  .cell-inner input{flex:1 1 auto; min-width:0;}
+  .badge-auto{font-size:10px; padding:2px 5px; border-radius:5px; background:var(--st-done-bg); color:var(--st-done); white-space:nowrap; flex:0 0 auto;}
+  .badge-manual{font-size:10px; padding:2px 5px; border-radius:5px; background:var(--st-hold-bg); color:var(--st-hold); white-space:nowrap; flex:0 0 auto;}
+  .reset-btn{border:none; background:none; cursor:pointer; color:var(--sub); font-size:13px; padding:2px 4px; flex:0 0 auto;}
+  .reset-btn:hover{color:var(--accent);}
+  .dow{font-size:11px; color:var(--sub); white-space:nowrap; flex:0 0 auto;}
+  .weekend-warn{color:var(--danger);}
+
+  select[data-field=status]{font-weight:600;}
+  select[data-status=완료]{color:var(--st-done);}
+  select[data-status=진행]{color:var(--st-progress);}
+  select[data-status=보류]{color:var(--st-hold);}
+  select[data-status=예정]{color:var(--st-plan);}
+  .status-pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700;}
+  .status-pill[data-status=완료]{color:var(--st-done); background:var(--st-done-bg);}
+  .status-pill[data-status=진행]{color:var(--st-progress); background:var(--st-progress-bg);}
+  .status-pill[data-status=보류]{color:var(--st-hold); background:var(--st-hold-bg);}
+  .status-pill[data-status=예정]{color:var(--st-plan); background:var(--st-plan-bg);}
+
+  .actions-inner{display:flex; gap:4px; align-items:center;}
+  .empty{text-align:center; color:var(--sub); padding:30px !important;}
+
+  /* Gantt (weekly grid table) */
+  #ganttSection h2{font-size:16px; margin:0 0 10px;}
+  .gantt-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:8px;}
+  .gantt-table{border-collapse:collapse; font-size:11.5px; table-layout:fixed;}
+  .gantt-table col.g-col-no{width:44px;}
+  .gantt-table col.g-col-cat{width:66px;}
+  .gantt-table col.g-col-detail{width:220px;}
+  .gantt-table col.g-col-week{width:30px;}
+  .gantt-table col.g-col-status{width:60px;}
+  .gantt-table th, .gantt-table td{border:1px solid var(--border); padding:4px 5px; text-align:center; white-space:nowrap;}
+  .gantt-table thead th{background:var(--bg); color:var(--sub); font-weight:700; position:sticky; top:0; z-index:2;}
+  .gantt-table .gantt-title-cell{text-align:left; overflow:hidden; text-overflow:ellipsis; max-width:220px;}
+  .gantt-table .sticky-c1, .gantt-table .sticky-c2, .gantt-table .sticky-c3{position:sticky; background:var(--panel); z-index:1;}
+  .gantt-table thead .sticky-c1, .gantt-table thead .sticky-c2, .gantt-table thead .sticky-c3{z-index:3; background:var(--bg);}
+  .gantt-table .sticky-c1{left:0;}
+  .gantt-table .sticky-c2{left:44px;}
+  .gantt-table .sticky-c3{left:110px;}
+  .gantt-row-group td{background:var(--bg); font-weight:700;}
+  .gantt-row-group td.sticky-c1, .gantt-row-group td.sticky-c2, .gantt-row-group td.sticky-c3{background:var(--bg);}
+  .gantt-week-th.current-week{color:var(--danger);}
+  td.gantt-cell.current-week{background:rgba(230,90,80,.10);}
+  td.gantt-cell[data-status]{color:#fff; font-size:0;}
+  td.gantt-cell[data-status=완료]{background:var(--st-done);}
+  td.gantt-cell[data-status=진행]{background:var(--st-progress);}
+  td.gantt-cell[data-status=보류]{background:var(--st-hold);}
+  td.gantt-cell[data-status=예정]{background:var(--st-plan);}
+
+  /* Modal */
+  .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50;}
+  .modal-overlay.hidden{display:none;}
+  .modal{background:var(--panel); border-radius:12px; padding:20px; width:440px; max-height:80vh; overflow:auto; box-shadow:var(--shadow);}
+  .modal h2{margin-top:0; font-size:16px;}
+  .holiday-form{display:flex; gap:6px; margin-bottom:12px;}
+  .holiday-form input[type=date]{flex:1.2;}
+  .holiday-form input[type=text]{flex:1;}
+  .holiday-list{max-height:320px; overflow:auto; border:1px solid var(--border); border-radius:8px;}
+  .holiday-item{display:flex; align-items:center; justify-content:space-between; padding:6px 10px; border-bottom:1px solid var(--border); font-size:13px;}
+  .holiday-item:last-child{border-bottom:none;}
+  .holiday-item.just-added{animation: hd-flash 1.6s ease;}
+  @keyframes hd-flash{
+    0%{background:var(--st-progress-bg);}
+    100%{background:transparent;}
+  }
+  .holiday-item .hd-date{font-variant-numeric:tabular-nums; color:var(--sub); width:110px;}
+  .holiday-item .hd-name{flex:1;}
+  .modal-footer{display:flex; justify-content:space-between; margin-top:14px;}
+
+  .info-box{font-size:12.5px; color:var(--sub); background:var(--bg); border:1px dashed var(--border); border-radius:8px; padding:10px 12px; line-height:1.6;}
+  @media print{
+    .toolbar, #ganttSection, .no-print{display:none !important;}
+    body{background:#fff;}
+    .panel{box-shadow:none; border:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>WBS 일정 관리</h1>
+  <p class="desc">시작일과 M/D(공수)를 입력하면 대한민국 공휴일과 주말을 제외한 영업일 기준으로 종료일이 자동 계산됩니다.</p>
+
+  <div class="panel no-print">
+    <div class="toolbar">
+      <button class="primary" id="btnAddGroup">+ 그룹 추가</button>
+      <button id="btnHolidays">공휴일 관리</button>
+      <div class="spacer"></div>
+      <button id="btnExportJson">JSON 내보내기</button>
+      <button id="btnImportJsonTrigger">JSON 가져오기</button>
+      <input type="file" id="fileImport" accept="application/json" style="display:none">
+      <button id="btnExportCsv">CSV 내보내기</button>
+      <button class="primary" id="btnExportXlsx">엑셀 다운로드 (.xlsx)</button>
+      <button id="btnPrint">인쇄</button>
+      <button class="danger" id="btnClearAll">전체 초기화</button>
+    </div>
+    <div class="summary" id="summaryBar"></div>
+  </div>
+
+  <div class="panel" style="padding:0; overflow-x:auto;">
+    <table id="wbsTable">
+      <colgroup>
+        <col class="c-no"><col class="c-cat"><col class="c-detail"><col class="c-assignee">
+        <col class="c-md"><col class="c-date"><col class="c-date-end"><col class="c-status"><col class="c-actions">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>순번</th><th>구분</th><th>상세업무</th><th>담당자</th><th class="col-md">M/D</th>
+          <th>시작일</th><th>종료일</th><th>상태</th><th class="no-print">관리</th>
+        </tr>
+      </thead>
+      <tbody id="wbsBody"></tbody>
+    </table>
+  </div>
+
+  <div class="panel info-box no-print">
+    종료일은 시작일 + M/D 만큼의 <b>영업일</b>(주말·공휴일 제외)을 계산하여 자동으로 채워집니다.
+    종료일을 직접 수정하면 해당 행은 <span class="badge-manual" style="display:inline">수동</span>으로 표시되고 더 이상 자동 계산되지 않습니다 — ↺ 버튼으로 자동 계산으로 되돌릴 수 있습니다.
+    대한민국 공휴일은 연도에 관계없이 자동으로 반영되며(대체공휴일 포함), 상단 <b>공휴일 관리</b>에서 직접 추가·삭제도 가능합니다.
+  </div>
+
+  <div class="panel" id="ganttSection">
+    <h2>일정 간트차트</h2>
+    <div class="gantt-scroll">
+      <div class="gantt-inner" id="ganttInner"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="holidayModal">
+  <div class="modal">
+    <h2>공휴일 관리 (대한민국 기준)</h2>
+    <p style="font-size:12px; color:var(--sub); line-height:1.6; margin-top:-6px;">
+      신정·삼일절·어린이날·현충일·광복절·개천절·한글날·크리스마스·근로자의 날은 연도별로 자동 계산되어 반영되며,
+      대체공휴일 규정도 함께 적용됩니다. 설날·추석·부처님오신날처럼 음력 기준인 공휴일은 2025~2026년까지 등록되어 있으며,
+      그 외 연도나 회사 자체 휴일은 아래에서 직접 추가할 수 있습니다.
+    </p>
+    <div class="holiday-form">
+      <input type="date" id="hdDate">
+      <input type="text" id="hdName" placeholder="공휴일명">
+      <button class="primary small" id="hdAdd">추가</button>
+    </div>
+    <div class="holiday-list" id="holidayList"></div>
+    <div class="modal-footer">
+      <button class="danger small" id="hdReset">기본값으로 초기화</button>
+      <button class="small" id="hdClose">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- Date helpers ---------------- */
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function toISO(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+  function parseISO(s){
+    if(!s) return null;
+    const parts = s.split('-');
+    if(parts.length!==3) return null;
+    const y=Number(parts[0]), m=Number(parts[1]), d=Number(parts[2]);
+    if(!y||!m||!d) return null;
+    return new Date(y, m-1, d);
+  }
+  const DOW = ['일','월','화','수','목','금','토'];
+  function dowKR(d){ return DOW[d.getDay()]; }
+  function fmtDisplay(s){
+    const d = parseISO(s);
+    if(!d) return '';
+    return s.replace(/-/g,'.') + ' (' + dowKR(d) + ')';
+  }
+  function diffDays(a,b){ return Math.round((parseISO(b)-parseISO(a))/86400000); }
+  function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(36).slice(2)); }
+
+  /* ---------------- Holidays (Korea) ---------------- */
+  // 음력 기준 공휴일(설날·추석·부처님오신날)은 매년 날짜가 달라 계산식으로 구할 수 없어
+  // 실제 관보 고시 날짜를 미리 입력해 둔 표입니다. 아래 연도는 대체공휴일까지 포함해 검증된 값입니다.
+  const CURATED_LUNAR_YEARS = {2025:true, 2026:true};
+  const CURATED_LUNAR_HOLIDAYS = {
+    "2025-01-01":"신정","2025-01-27":"임시공휴일","2025-01-28":"설날 연휴","2025-01-29":"설날","2025-01-30":"설날 연휴",
+    "2025-03-01":"삼일절","2025-03-03":"대체공휴일(삼일절)","2025-05-01":"근로자의 날","2025-05-05":"어린이날·부처님오신날",
+    "2025-05-06":"대체공휴일","2025-06-06":"현충일","2025-08-15":"광복절","2025-10-03":"개천절","2025-10-05":"추석 연휴",
+    "2025-10-06":"추석","2025-10-07":"추석 연휴","2025-10-08":"대체공휴일(추석)","2025-10-09":"한글날","2025-12-25":"크리스마스",
+    "2026-01-01":"신정","2026-02-16":"설날 연휴","2026-02-17":"설날","2026-02-18":"설날 연휴","2026-03-01":"삼일절",
+    "2026-03-02":"대체공휴일(삼일절)","2026-05-01":"근로자의 날","2026-05-05":"어린이날","2026-05-24":"부처님오신날",
+    "2026-05-25":"대체공휴일(부처님오신날)","2026-06-06":"현충일","2026-08-15":"광복절","2026-08-17":"대체공휴일(광복절)",
+    "2026-09-24":"추석 연휴","2026-09-25":"추석","2026-09-26":"추석 연휴","2026-10-03":"개천절","2026-10-05":"대체공휴일(개천절)",
+    "2026-10-09":"한글날","2026-12-25":"크리스마스"
+  };
+
+  // 날짜가 고정된 공휴일은 연도만 주어지면 계산식으로 자동 생성하고,
+  // 법령상 대체공휴일 대상(삼일절·어린이날·광복절·개천절·한글날)은 토/일요일과 겹칠 때 대체일도 함께 계산합니다.
+  function computeFixedHolidaysForYear(year){
+    const map = {};
+    const base = [
+      {m:1, d:1, name:'신정', sub:false},
+      {m:3, d:1, name:'삼일절', sub:true},
+      {m:5, d:1, name:'근로자의 날', sub:false},
+      {m:5, d:5, name:'어린이날', sub:true},
+      {m:6, d:6, name:'현충일', sub:false},
+      {m:8, d:15, name:'광복절', sub:true},
+      {m:10, d:3, name:'개천절', sub:true},
+      {m:10, d:9, name:'한글날', sub:true},
+      {m:12, d:25, name:'크리스마스', sub:false}
+    ];
+    base.forEach(function(h){
+      map[toISO(new Date(year, h.m-1, h.d))] = h.name;
+    });
+    base.filter(function(h){ return h.sub; }).forEach(function(h){
+      const d = new Date(year, h.m-1, h.d);
+      if(d.getDay()===0 || d.getDay()===6){
+        let s = new Date(d);
+        s.setDate(s.getDate()+1);
+        let guard = 0;
+        while((s.getDay()===0 || s.getDay()===6 || map[toISO(s)]) && guard<10){ s.setDate(s.getDate()+1); guard++; }
+        map[toISO(s)] = '대체공휴일('+h.name+')';
+      }
+    });
+    return map;
+  }
+
+  // 사용자가 직접 추가한 공휴일과, 자동 반영 목록에서 사용자가 삭제한 날짜(복원 방지용)를 저장합니다.
+  const HOLIDAY_CUSTOM_KEY = 'wbs_holiday_custom_v2';
+  const HOLIDAY_REMOVED_KEY = 'wbs_holiday_removed_v2';
+  let customHolidays = {};
+  let removedAuto = {};
+  let autoHolidays = {};
+  let holidays = {};
+
+  function loadHolidayStorage(){
+    try{ customHolidays = JSON.parse(localStorage.getItem(HOLIDAY_CUSTOM_KEY) || '{}'); }catch(e){ customHolidays = {}; }
+    try{ removedAuto = JSON.parse(localStorage.getItem(HOLIDAY_REMOVED_KEY) || '{}'); }catch(e){ removedAuto = {}; }
+  }
+  function saveHolidayStorage(){
+    try{
+      localStorage.setItem(HOLIDAY_CUSTOM_KEY, JSON.stringify(customHolidays));
+      localStorage.setItem(HOLIDAY_REMOVED_KEY, JSON.stringify(removedAuto));
+    }catch(e){ console.warn('공휴일 저장 실패:', e); }
+  }
+
+  // 현재 WBS에 등장하는 연도 범위(+여유분)를 구해 그 범위만큼만 공휴일을 생성합니다.
+  function yearsInScope(){
+    const now = new Date().getFullYear();
+    let minY = now - 1, maxY = now + 6;
+    state.groups.forEach(function(g){
+      g.tasks.forEach(function(t){
+        [t.start, t.end].forEach(function(s){
+          if(s && s.length>=4){
+            const y = Number(s.slice(0,4));
+            if(y){ if(y-1<minY) minY=y-1; if(y+1>maxY) maxY=y+1; }
+          }
+        });
+      });
+    });
+    return {minY:minY, maxY:maxY};
+  }
+
+  function rebuildHolidays(){
+    const range = yearsInScope();
+    const map = {};
+    for(let y=range.minY; y<=range.maxY; y++){
+      if(CURATED_LUNAR_YEARS[y]){
+        Object.keys(CURATED_LUNAR_HOLIDAYS).forEach(function(k){
+          if(Number(k.slice(0,4))===y) map[k] = CURATED_LUNAR_HOLIDAYS[k];
+        });
+      } else {
+        Object.assign(map, computeFixedHolidaysForYear(y));
+      }
+    }
+    autoHolidays = map;
+    const effective = Object.assign({}, map);
+    Object.keys(removedAuto).forEach(function(k){ delete effective[k]; });
+    Object.assign(effective, customHolidays);
+    holidays = effective;
+  }
+
+  function isBusinessDay(d){
+    const day = d.getDay();
+    if(day===0 || day===6) return false;
+    if(Object.prototype.hasOwnProperty.call(holidays, toISO(d))) return false;
+    return true;
+  }
+  function addBusinessDays(startStr, md){
+    const needed = Math.max(1, Math.ceil(Number(md)||0));
+    let d = parseISO(startStr);
+    if(!d) return '';
+    let count=0, guard=0;
+    while(true){
+      if(isBusinessDay(d)){ count++; if(count===needed) break; }
+      d.setDate(d.getDate()+1);
+      guard++;
+      if(guard>3660) break;
+    }
+    return toISO(d);
+  }
+  function nextBusinessDay(startStr){
+    let d = parseISO(startStr);
+    if(!d) d = new Date();
+    d.setDate(d.getDate()+1);
+    let guard=0;
+    while(!isBusinessDay(d) && guard<400){ d.setDate(d.getDate()+1); guard++; }
+    return toISO(d);
+  }
+
+  /* ---------------- State ---------------- */
+  const STORAGE_KEY = 'wbs_data_v1';
+  let state = { groups: [] };
+
+  function makeTask(overrides){
+    return Object.assign({
+      id: uid(), category:'', detail:'', assignee:'', md:1,
+      start: toISO(new Date()), end:'', endManual:false, status:'예정'
+    }, overrides||{});
+  }
+  function makeGroup(overrides){
+    return Object.assign({ id: uid(), category:'', title:'', tasks:[] }, overrides||{});
+  }
+
+  function seedData(){
+    const g1 = makeGroup({ category:'영업자료', title:'A10 업무유형별 활용 가이드 리뉴얼 - 연말정산' });
+    g1.tasks = [
+      makeTask({category:'수정', detail:'수정 작성', assignee:'손규원, 임민주', md:6, start:'2026-01-02', status:'완료'}),
+      makeTask({category:'검토', detail:'설계팀 검토', assignee:'설계팀', md:2, start:'2026-01-12', status:'완료'}),
+      makeTask({category:'수정', detail:'활용 가이드 최종 수정', assignee:'손규원', md:1, start:'2026-01-14', status:'완료'}),
+      makeTask({category:'배포', detail:'배포 및 게시', assignee:'손규원, 임민주', md:1, start:'2026-01-14', status:'완료'})
+    ];
+    const g2 = makeGroup({ category:'내부문서', title:'프로젝트 및 개발 완료 보고서 작성' });
+    g2.tasks = [
+      makeTask({category:'작성', detail:'Amaranth 10 매뉴얼 표준화 완료보고서', assignee:'손규원', md:3, start:'2026-01-12', status:'완료'}),
+      makeTask({category:'작성', detail:'ONE AI 상담챗봇 고도화 및 관리자 메뉴 개발 완료보고서', assignee:'임민주, 손규원', md:4, start:'2026-01-15', status:'완료'}),
+      makeTask({category:'보고', detail:'상무님께 보고', assignee:'안현정', md:1, start:'2026-01-23', status:'완료'})
+    ];
+    state = { groups: [g1, g2] };
+  }
+
+  function save(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.warn('WBS 저장 실패:', e); } }
+  function load(){
+    let raw = null;
+    try{ raw = localStorage.getItem(STORAGE_KEY); }catch(e){ console.warn('WBS 불러오기 실패:', e); }
+    if(raw){
+      try{ state = JSON.parse(raw); return; } catch(e){}
+    }
+    seedData();
+  }
+
+  /* ---------------- Recalc ---------------- */
+  function recalcTask(t){
+    if(!t.endManual){
+      t.end = t.start ? addBusinessDays(t.start, t.md) : '';
+    }
+  }
+  function recalcGroup(g){
+    g.tasks.forEach(recalcTask);
+    const mdSum = g.tasks.reduce((s,t)=> s + (Number(t.md)||0), 0);
+    const starts = g.tasks.map(t=>t.start).filter(Boolean).sort();
+    const ends = g.tasks.map(t=>t.end).filter(Boolean).sort();
+    g._md = mdSum;
+    g._start = starts[0] || '';
+    g._end = ends.length ? ends[ends.length-1] : '';
+    if(g.tasks.length===0) g._status = '예정';
+    else if(g.tasks.every(t=>t.status==='완료')) g._status = '완료';
+    else if(g.tasks.some(t=>t.status==='진행')) g._status = '진행';
+    else if(g.tasks.some(t=>t.status==='보류')) g._status = '보류';
+    else g._status = '예정';
+  }
+  function recalcAll(){ state.groups.forEach(recalcGroup); }
+
+  /* ---------------- DOM helper ---------------- */
+  function el(tag, props, children){
+    const e = document.createElement(tag);
+    props = props || {};
+    Object.keys(props).forEach(function(k){
+      const v = props[k];
+      if(k==='class') e.className = v;
+      else if(k==='html') e.innerHTML = v;
+      else if(k.slice(0,2)==='on') e.addEventListener(k.slice(2).toLowerCase(), v);
+      else e.setAttribute(k, v);
+    });
+    (children||[]).forEach(function(c){
+      if(c==null) return;
+      e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    });
+    return e;
+  }
+
+  let saveTimer = null;
+  function debouncedSave(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 300);
+  }
+
+  function fullRender(){
+    rebuildHolidays();
+    recalcAll();
+    renderTable();
+    renderSummary();
+    renderGantt();
+    save();
+  }
+
+  /* ---------------- Table rendering ---------------- */
+  function buildGroupRow(g, gi){
+    const tr = el('tr', {class:'group-row'});
+    tr.appendChild(el('td', {}, [String(gi+1)]));
+    tr.appendChild(el('td', {}, [
+      el('input', {type:'text', value:g.category, placeholder:'구분', oninput:function(e){ g.category=e.target.value; debouncedSave(); }})
+    ]));
+    tr.appendChild(el('td', {}, [
+      el('input', {type:'text', value:g.title, placeholder:'상세업무(그룹명)', oninput:function(e){ g.title=e.target.value; debouncedSave(); }})
+    ]));
+    tr.appendChild(el('td', {}, ['']));
+    tr.appendChild(el('td', {class:'col-md'}, [String(g._md||0)]));
+    tr.appendChild(el('td', {}, [g._start ? fmtDisplay(g._start) : '']));
+    tr.appendChild(el('td', {}, [g._end ? fmtDisplay(g._end) : '']));
+    tr.appendChild(el('td', {}, [
+      el('span', {class:'status-pill', 'data-status': g._status||'예정'}, [g._status||'예정'])
+    ]));
+    const actions = el('td', {class:'actions-cell no-print'});
+    const actionsInner = el('div', {class:'actions-inner'});
+    actionsInner.appendChild(el('button', {class:'small', title:'하위업무 추가', onclick:function(){
+      const prev = g.tasks[g.tasks.length-1];
+      const start = prev && prev.end ? nextBusinessDay(prev.end) : toISO(new Date());
+      g.tasks.push(makeTask({start:start}));
+      fullRender();
+    }}, ['추가']));
+    actionsInner.appendChild(el('button', {class:'small danger', onclick:function(){
+      if(confirm('"'+(g.title||'제목없음')+'" 그룹과 하위 업무를 모두 삭제할까요?')){
+        state.groups = state.groups.filter(function(x){ return x.id!==g.id; });
+        fullRender();
+      }
+    }}, ['삭제']));
+    actions.appendChild(actionsInner);
+    tr.appendChild(actions);
+    return tr;
+  }
+
+  function buildTaskRow(g, t, gi, ti){
+    const tr = el('tr', {class:'task-row'});
+    tr.appendChild(el('td', {}, [gi+1+'.'+(ti+1)]));
+    tr.appendChild(el('td', {}, [
+      el('input', {type:'text', value:t.category, placeholder:'구분', oninput:function(e){ t.category=e.target.value; debouncedSave(); }})
+    ]));
+    tr.appendChild(el('td', {}, [
+      el('input', {type:'text', value:t.detail, placeholder:'상세업무', oninput:function(e){ t.detail=e.target.value; debouncedSave(); }})
+    ]));
+    tr.appendChild(el('td', {}, [
+      el('input', {type:'text', value:t.assignee, placeholder:'담당자', oninput:function(e){ t.assignee=e.target.value; debouncedSave(); }})
+    ]));
+    tr.appendChild(el('td', {}, [
+      el('input', {type:'number', min:'0', step:'1', value:String(t.md), onchange:function(e){
+        let v = Math.round(Number(e.target.value)||0);
+        if(v<0) v = 0;
+        t.md = v;
+        fullRender();
+      }})
+    ]));
+    const startTd = el('td', {class:'start-cell'});
+    const startInner = el('div', {class:'cell-inner'});
+    startInner.appendChild(el('input', {type:'date', value:t.start||'', onchange:function(e){
+      t.start = e.target.value; fullRender();
+    }}));
+    const startDow = parseISO(t.start);
+    if(startDow) startInner.appendChild(el('span', {class:'dow'}, ['('+dowKR(startDow)+')']));
+    startTd.appendChild(startInner);
+    tr.appendChild(startTd);
+
+    const endTd = el('td', {class:'end-cell'});
+    const endInner = el('div', {class:'cell-inner'});
+    endInner.appendChild(el('input', {type:'date', value:t.end||'', onchange:function(e){
+      t.end = e.target.value; t.endManual = true; fullRender();
+    }}));
+    const endDow = parseISO(t.end);
+    if(endDow) endInner.appendChild(el('span', {class:'dow'}, ['('+dowKR(endDow)+')']));
+    if(t.endManual){
+      endInner.appendChild(el('span', {class:'badge-manual', title:'수동으로 지정된 종료일입니다'}, ['수동']));
+      endInner.appendChild(el('button', {class:'reset-btn', title:'자동 계산으로 되돌리기', onclick:function(){
+        t.endManual = false; fullRender();
+      }}, ['↺']));
+    } else {
+      endInner.appendChild(el('span', {class:'badge-auto', title:'영업일 기준 자동 계산됨'}, ['자동']));
+    }
+    endTd.appendChild(endInner);
+    tr.appendChild(endTd);
+
+    const statusSel = el('select', {'data-field':'status', 'data-status':t.status, onchange:function(e){
+      t.status = e.target.value; fullRender();
+    }});
+    ['예정','진행','완료','보류'].forEach(function(s){
+      statusSel.appendChild(el('option', Object.assign({value:s}, s===t.status?{selected:'selected'}:{}), [s]));
+    });
+    tr.appendChild(el('td', {}, [statusSel]));
+
+    const actions = el('td', {class:'actions-cell no-print'});
+    const actionsInner = el('div', {class:'actions-inner'});
+    actionsInner.appendChild(el('button', {class:'small danger', onclick:function(){
+      g.tasks = g.tasks.filter(function(x){ return x.id!==t.id; });
+      fullRender();
+    }}, ['삭제']));
+    actions.appendChild(actionsInner);
+    tr.appendChild(actions);
+
+    return tr;
+  }
+
+  function renderTable(){
+    const tbody = document.getElementById('wbsBody');
+    tbody.innerHTML = '';
+    if(state.groups.length===0){
+      tbody.appendChild(el('tr', {}, [el('td', {colspan:'9', class:'empty'}, ['상단의 "+ 그룹 추가" 버튼을 눌러 WBS 작성을 시작하세요.'])]));
+      return;
+    }
+    state.groups.forEach(function(g, gi){
+      tbody.appendChild(buildGroupRow(g, gi));
+      g.tasks.forEach(function(t, ti){
+        tbody.appendChild(buildTaskRow(g, t, gi, ti));
+      });
+    });
+  }
+
+  /* ---------------- Summary ---------------- */
+  function renderSummary(){
+    const bar = document.getElementById('summaryBar');
+    bar.innerHTML = '';
+    let allTasks = [];
+    state.groups.forEach(function(g){ allTasks = allTasks.concat(g.tasks); });
+    const totalMd = allTasks.reduce(function(s,t){ return s+(Number(t.md)||0); }, 0);
+    const starts = allTasks.map(function(t){ return t.start; }).filter(Boolean).sort();
+    const ends = allTasks.map(function(t){ return t.end; }).filter(Boolean).sort();
+    const counts = {완료:0, 진행:0, 보류:0, 예정:0};
+    allTasks.forEach(function(t){ counts[t.status] = (counts[t.status]||0)+1; });
+
+    function item(label, value){
+      return el('div', {class:'item'}, [label, el('b', {}, [value])]);
+    }
+    bar.appendChild(item('그룹 수', String(state.groups.length)));
+    bar.appendChild(item('전체 업무 수', String(allTasks.length)));
+    bar.appendChild(item('총 M/D', String(totalMd)));
+    bar.appendChild(item('전체 기간', starts.length ? (fmtDisplay(starts[0])+' ~ '+fmtDisplay(ends[ends.length-1])) : '-'));
+    const statusWrap = el('div', {class:'item'}, ['상태']);
+    const chipRow = el('div', {}, []);
+    chipRow.style.marginTop = '4px';
+    chipRow.appendChild(el('span', {class:'chip done'}, ['완료 '+counts.완료]));
+    chipRow.appendChild(document.createTextNode(' '));
+    chipRow.appendChild(el('span', {class:'chip progress'}, ['진행 '+counts.진행]));
+    chipRow.appendChild(document.createTextNode(' '));
+    chipRow.appendChild(el('span', {class:'chip hold'}, ['보류 '+counts.보류]));
+    chipRow.appendChild(document.createTextNode(' '));
+    chipRow.appendChild(el('span', {class:'chip plan'}, ['예정 '+counts.예정]));
+    statusWrap.appendChild(chipRow);
+    bar.appendChild(statusWrap);
+  }
+
+  /* ---------------- Gantt (weekly grid, month-relative weeks: 1~7일=1w, 8~14일=2w ...) ---------------- */
+  function buildWeeks(minStartStr, maxEndStr){
+    const minD = parseISO(minStartStr), maxD = parseISO(maxEndStr);
+    let y = minD.getFullYear(), m = minD.getMonth();
+    const endY = maxD.getFullYear(), endM = maxD.getMonth();
+    const weeks = [];
+    let guard = 0;
+    while((y<endY || (y===endY && m<=endM)) && guard<2400){
+      const daysInMonth = new Date(y, m+1, 0).getDate();
+      let day = 1;
+      while(day<=daysInMonth){
+        const dayEnd = Math.min(day+6, daysInMonth);
+        weeks.push({start: new Date(y,m,day), end: new Date(y,m,dayEnd), year:y, month:m});
+        day += 7;
+        guard++;
+      }
+      m++;
+      if(m>11){ m=0; y++; }
+    }
+    return weeks;
+  }
+  function weekOverlaps(week, startStr, endStr){
+    if(!startStr || !endStr) return false;
+    const s = parseISO(startStr), e = parseISO(endStr);
+    return !(e < week.start || s > week.end);
+  }
+  function isCurrentWeek(week){
+    const t = new Date(); t.setHours(0,0,0,0);
+    return t>=week.start && t<=week.end;
+  }
+
+  function ganttLabelCells(no, category, title){
+    return [
+      el('td', {class:'sticky-c1'}, [no]),
+      el('td', {class:'sticky-c2'}, [category||'']),
+      el('td', {class:'sticky-c3 gantt-title-cell', title:title||''}, [title||''])
+    ];
+  }
+
+  function renderGantt(){
+    const container = document.getElementById('ganttInner');
+    container.innerHTML = '';
+    let allTasks = [];
+    state.groups.forEach(function(g){ allTasks = allTasks.concat(g.tasks); });
+    const validStarts = allTasks.map(function(t){ return t.start; }).filter(Boolean);
+    const validEnds = allTasks.map(function(t){ return t.end; }).filter(Boolean);
+    if(validStarts.length===0 || validEnds.length===0){
+      container.appendChild(el('div', {style:'padding:20px; color:var(--sub); font-size:13px;'}, ['표시할 일정 데이터가 없습니다.']));
+      return;
+    }
+    const minStart = validStarts.slice().sort()[0];
+    const maxEnd = validEnds.slice().sort().slice(-1)[0];
+    const weeks = buildWeeks(minStart, maxEnd);
+
+    const table = el('table', {class:'gantt-table'});
+    const colgroup = el('colgroup');
+    colgroup.appendChild(el('col', {class:'g-col-no'}));
+    colgroup.appendChild(el('col', {class:'g-col-cat'}));
+    colgroup.appendChild(el('col', {class:'g-col-detail'}));
+    weeks.forEach(function(){ colgroup.appendChild(el('col', {class:'g-col-week'})); });
+    colgroup.appendChild(el('col', {class:'g-col-status'}));
+    table.appendChild(colgroup);
+
+    const thead = el('thead');
+    const monthRow = el('tr');
+    monthRow.appendChild(el('th', {rowspan:'2', class:'sticky-c1'}, ['순번']));
+    monthRow.appendChild(el('th', {rowspan:'2', class:'sticky-c2'}, ['구분']));
+    monthRow.appendChild(el('th', {rowspan:'2', class:'sticky-c3'}, ['상세업무']));
+    let i=0;
+    while(i<weeks.length){
+      const m = weeks[i].start.getMonth();
+      let span=0;
+      while(i+span<weeks.length && weeks[i+span].start.getMonth()===m) span++;
+      monthRow.appendChild(el('th', {colspan:String(span)}, [(m+1)+'월']));
+      i+=span;
+    }
+    monthRow.appendChild(el('th', {rowspan:'2'}, ['상태']));
+    thead.appendChild(monthRow);
+
+    const weekRow = el('tr');
+    const wCounters = {};
+    weeks.forEach(function(w){
+      const key = w.start.getFullYear()+'-'+w.start.getMonth();
+      wCounters[key] = (wCounters[key]||0)+1;
+      weekRow.appendChild(el('th', {class:'gantt-week-th'+(isCurrentWeek(w)?' current-week':'')}, [wCounters[key]+'w']));
+    });
+    thead.appendChild(weekRow);
+    table.appendChild(thead);
+
+    const tbody = el('tbody');
+    state.groups.forEach(function(g, gi){
+      const gtr = el('tr', {class:'gantt-row-group'});
+      ganttLabelCells((gi+1)+'', g.category, g.title||'(제목없음)').forEach(function(td){ gtr.appendChild(td); });
+      weeks.forEach(function(w){
+        const active = weekOverlaps(w, g._start, g._end);
+        const td = el('td', {class:'gantt-cell'+(isCurrentWeek(w)?' current-week':'')});
+        if(active) td.setAttribute('data-status', g._status||'예정');
+        if(active) td.title = (g.title||'')+' ('+fmtDisplay(g._start)+' ~ '+fmtDisplay(g._end)+', '+g._md+'MD)';
+        gtr.appendChild(td);
+      });
+      gtr.appendChild(el('td', {}, [g._status||'']));
+      tbody.appendChild(gtr);
+
+      g.tasks.forEach(function(t, ti){
+        const ttr = el('tr', {class:'gantt-row-task'});
+        ganttLabelCells((gi+1)+'.'+(ti+1), t.category, t.detail).forEach(function(td){ ttr.appendChild(td); });
+        weeks.forEach(function(w){
+          const active = weekOverlaps(w, t.start, t.end);
+          const td = el('td', {class:'gantt-cell'+(isCurrentWeek(w)?' current-week':'')});
+          if(active) td.setAttribute('data-status', t.status);
+          if(active) td.title = (t.detail||'')+' ('+fmtDisplay(t.start)+' ~ '+fmtDisplay(t.end)+', '+t.md+'MD)';
+          ttr.appendChild(td);
+        });
+        ttr.appendChild(el('td', {}, [t.status]));
+        tbody.appendChild(ttr);
+      });
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+  }
+
+  /* ---------------- Holiday modal ---------------- */
+  function renderHolidayList(highlightKey){
+    const list = document.getElementById('holidayList');
+    list.innerHTML = '';
+    const keys = Object.keys(holidays).sort();
+    if(keys.length===0){
+      list.appendChild(el('div', {style:'padding:12px; color:var(--sub); font-size:13px;'}, ['등록된 공휴일이 없습니다.']));
+      return;
+    }
+    keys.forEach(function(k){
+      const isCustom = Object.prototype.hasOwnProperty.call(customHolidays, k);
+      const item = el('div', {class:'holiday-item'+(k===highlightKey?' just-added':'')});
+      item.appendChild(el('span', {class:'hd-date'}, [k + ' (' + dowKR(parseISO(k)) + ')']));
+      item.appendChild(el('span', {class:'hd-name'}, [holidays[k]]));
+      item.appendChild(el('span', {class: isCustom ? 'badge-manual' : 'badge-auto'}, [isCustom ? '사용자 지정' : '자동']));
+      item.appendChild(el('button', {class:'reset-btn', title:'삭제', onclick:function(){
+        if(isCustom){ delete customHolidays[k]; }
+        else { removedAuto[k] = true; }
+        saveHolidayStorage();
+        rebuildHolidays();
+        renderHolidayList();
+        fullRender();
+      }}, ['✕']));
+      list.appendChild(item);
+    });
+    if(highlightKey){
+      const target = list.querySelector('.just-added');
+      if(target) target.scrollIntoView({block:'center'});
+    }
+  }
+
+  /* ---------------- Export / Import ---------------- */
+  function download(filename, content, mime){
+    const blob = new Blob([content], {type: mime});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+  function csvEscape(v){
+    v = String(v==null?'':v);
+    if(/[",\n]/.test(v)) return '"'+v.replace(/"/g,'""')+'"';
+    return v;
+  }
+  function exportCsv(){
+    const rows = [['순번','구분','상세업무','담당자','M/D','시작일','종료일','상태']];
+    state.groups.forEach(function(g, gi){
+      rows.push([String(gi+1), g.category, g.title, '', String(g._md||0), '', '', g._status||'']);
+      g.tasks.forEach(function(t, ti){
+        rows.push([(gi+1)+'.'+(ti+1), t.category, t.detail, t.assignee, String(t.md), fmtDisplay(t.start), fmtDisplay(t.end), t.status]);
+      });
+    });
+    const csv = '﻿' + rows.map(function(r){ return r.map(csvEscape).join(','); }).join('\r\n');
+    download('wbs_' + toISO(new Date()) + '.csv', csv, 'text/csv;charset=utf-8;');
+  }
+  function exportJson(){
+    download('wbs_' + toISO(new Date()) + '.json', JSON.stringify(state, null, 2), 'application/json;charset=utf-8;');
+  }
+
+  /* ---------------- XLSX (real Excel file, built without any library) ---------------- */
+  // Minimal ZIP (store/no-compression) writer — enough for a valid .xlsx package.
+  const CRC_TABLE = (function(){
+    const t = [];
+    for(let n=0;n<256;n++){
+      let c = n;
+      for(let k=0;k<8;k++){ c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); }
+      t[n] = c>>>0;
+    }
+    return t;
+  })();
+  function crc32(bytes){
+    let c = 0xFFFFFFFF;
+    for(let i=0;i<bytes.length;i++){ c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); }
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function u16(v){ return [v&0xFF, (v>>>8)&0xFF]; }
+  function u32(v){ return [v&0xFF, (v>>>8)&0xFF, (v>>>16)&0xFF, (v>>>24)&0xFF]; }
+  function dosDateTime(d){
+    const time = ((d.getHours()&0x1F)<<11) | ((d.getMinutes()&0x3F)<<5) | ((d.getSeconds()>>1)&0x1F);
+    const date = (((d.getFullYear()-1980)&0x7F)<<9) | (((d.getMonth()+1)&0xF)<<5) | (d.getDate()&0x1F);
+    return {time:time, date:date};
+  }
+  function makeZip(files){
+    const now = dosDateTime(new Date());
+    const enc = new TextEncoder();
+    const localParts = [];
+    const centralParts = [];
+    let offset = 0;
+    files.forEach(function(f){
+      const nameBytes = enc.encode(f.name);
+      const dataBytes = (f.data instanceof Uint8Array) ? f.data : enc.encode(f.data);
+      const crc = crc32(dataBytes);
+      const localHeader = [].concat(
+        u32(0x04034b50), u16(20), u16(0), u16(0),
+        u16(now.time), u16(now.date),
+        u32(crc), u32(dataBytes.length), u32(dataBytes.length),
+        u16(nameBytes.length), u16(0)
+      );
+      const localHeaderBytes = new Uint8Array(localHeader);
+      localParts.push(localHeaderBytes, nameBytes, dataBytes);
+
+      const centralHeader = [].concat(
+        u32(0x02014b50), u16(20), u16(20), u16(0), u16(0),
+        u16(now.time), u16(now.date),
+        u32(crc), u32(dataBytes.length), u32(dataBytes.length),
+        u16(nameBytes.length), u16(0), u16(0), u16(0), u16(0),
+        u32(0), u32(offset)
+      );
+      const centralHeaderBytes = new Uint8Array(centralHeader);
+      centralParts.push(centralHeaderBytes, nameBytes);
+
+      offset += localHeaderBytes.length + nameBytes.length + dataBytes.length;
+    });
+    const centralSize = centralParts.reduce(function(s,p){ return s+p.length; }, 0);
+    const centralOffset = offset;
+    const eocd = new Uint8Array([].concat(
+      u32(0x06054b50), u16(0), u16(0),
+      u16(files.length), u16(files.length),
+      u32(centralSize), u32(centralOffset), u16(0)
+    ));
+    return new Blob(localParts.concat(centralParts, [eocd]), {type:'application/zip'});
+  }
+
+  function xmlEscape(v){
+    return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function colLetter(n){
+    let s = '';
+    n = n+1;
+    while(n>0){
+      const r = (n-1)%26;
+      s = String.fromCharCode(65+r) + s;
+      n = Math.floor((n-1)/26);
+    }
+    return s;
+  }
+  function buildSheetXml(rows){
+    // rows: array of { cells: [string|number, ...], style: 0|1|2 }
+    const colWidths = [7,9,42,16,7,13,13,9];
+    let cols = '<cols>';
+    colWidths.forEach(function(w, i){ cols += '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>'; });
+    cols += '</cols>';
+    let rowsXml = '';
+    rows.forEach(function(row, ri){
+      const r = ri+1;
+      let cellsXml = '';
+      row.cells.forEach(function(val, ci){
+        const ref = colLetter(ci) + r;
+        const isNum = typeof val === 'number';
+        if(isNum){
+          cellsXml += '<c r="'+ref+'" s="'+row.style+'"><v>'+val+'</v></c>';
+        } else {
+          cellsXml += '<c r="'+ref+'" s="'+row.style+'" t="inlineStr"><is><t xml:space="preserve">'+xmlEscape(val)+'</t></is></c>';
+        }
+      });
+      rowsXml += '<row r="'+r+'">'+cellsXml+'</row>';
+    });
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      cols +
+      '<sheetData>'+rowsXml+'</sheetData>' +
+      '<pageSetup orientation="landscape"/>' +
+      '</worksheet>';
+  }
+  function buildWbsRows(){
+    const rows = [{style:1, cells:['순번','구분','상세업무','담당자','M/D','시작일','종료일','상태']}];
+    state.groups.forEach(function(g, gi){
+      rows.push({style:2, cells:[String(gi+1), g.category||'', g.title||'', '', g._md||0, '', '', g._status||'']});
+      g.tasks.forEach(function(t, ti){
+        rows.push({style:0, cells:[(gi+1)+'.'+(ti+1), t.category||'', t.detail||'', t.assignee||'', Number(t.md)||0, fmtDisplay(t.start), fmtDisplay(t.end), t.status||'']});
+      });
+    });
+    return rows;
+  }
+  function exportXlsx(){
+    const CONTENT_TYPES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      '</Types>';
+    const RELS_ROOT = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '</Relationships>';
+    const WORKBOOK = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<sheets><sheet name="WBS" sheetId="1" r:id="rId1"/></sheets>' +
+      '</workbook>';
+    const WORKBOOK_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '</Relationships>';
+    const STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<fonts count="3">' +
+      '<font><sz val="10"/><name val="맑은 고딕"/></font>' +
+      '<font><b/><sz val="10"/><name val="맑은 고딕"/></font>' +
+      '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="맑은 고딕"/></font>' +
+      '</fonts>' +
+      '<fills count="3">' +
+      '<fill><patternFill patternType="none"/></fill>' +
+      '<fill><patternFill patternType="gray125"/></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF2F6FED"/><bgColor indexed="64"/></patternFill></fill>' +
+      '</fills>' +
+      '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+      '<cellXfs count="3">' +
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+      '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+      '<xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>' +
+      '</cellXfs>' +
+      '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+      '</styleSheet>';
+    const SHEET = buildSheetXml(buildWbsRows());
+
+    const zipBlob = makeZip([
+      {name:'[Content_Types].xml', data:CONTENT_TYPES},
+      {name:'_rels/.rels', data:RELS_ROOT},
+      {name:'xl/workbook.xml', data:WORKBOOK},
+      {name:'xl/_rels/workbook.xml.rels', data:WORKBOOK_RELS},
+      {name:'xl/styles.xml', data:STYLES},
+      {name:'xl/worksheets/sheet1.xml', data:SHEET}
+    ]);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(zipBlob);
+    a.download = 'wbs_' + toISO(new Date()) + '.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+
+  /* ---------------- Wire up ---------------- */
+  document.getElementById('btnAddGroup').addEventListener('click', function(){
+    const g = makeGroup();
+    g.tasks.push(makeTask());
+    state.groups.push(g);
+    fullRender();
+  });
+  document.getElementById('btnHolidays').addEventListener('click', function(){
+    renderHolidayList();
+    document.getElementById('holidayModal').classList.remove('hidden');
+  });
+  document.getElementById('hdClose').addEventListener('click', function(){
+    document.getElementById('holidayModal').classList.add('hidden');
+  });
+  document.getElementById('holidayModal').addEventListener('click', function(e){
+    if(e.target.id==='holidayModal') e.currentTarget.classList.add('hidden');
+  });
+  function addHoliday(){
+    const dateEl = document.getElementById('hdDate');
+    const nameEl = document.getElementById('hdName');
+    if(!dateEl.value){ alert('날짜를 선택하세요.'); dateEl.focus(); return; }
+    const key = dateEl.value;
+    customHolidays[key] = nameEl.value || '사용자 지정 공휴일';
+    delete removedAuto[key];
+    saveHolidayStorage();
+    dateEl.value=''; nameEl.value='';
+    rebuildHolidays();
+    renderHolidayList(key);
+  }
+  document.getElementById('hdAdd').addEventListener('click', function(){
+    addHoliday();
+    fullRender();
+  });
+  ['hdDate','hdName'].forEach(function(id){
+    document.getElementById(id).addEventListener('keydown', function(e){
+      if(e.key==='Enter'){
+        e.preventDefault();
+        addHoliday();
+        fullRender();
+      }
+    });
+  });
+  document.getElementById('hdReset').addEventListener('click', function(){
+    if(confirm('사용자가 추가/삭제한 공휴일 내역을 모두 지우고 자동 반영 목록으로 되돌릴까요?')){
+      customHolidays = {};
+      removedAuto = {};
+      saveHolidayStorage();
+      rebuildHolidays();
+      renderHolidayList();
+      fullRender();
+    }
+  });
+  document.getElementById('btnExportCsv').addEventListener('click', exportCsv);
+  document.getElementById('btnExportXlsx').addEventListener('click', exportXlsx);
+  document.getElementById('btnExportJson').addEventListener('click', exportJson);
+  document.getElementById('btnImportJsonTrigger').addEventListener('click', function(){
+    document.getElementById('fileImport').click();
+  });
+  document.getElementById('fileImport').addEventListener('change', function(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        const data = JSON.parse(ev.target.result);
+        if(!data || !Array.isArray(data.groups)) throw new Error('invalid');
+        state = data;
+        fullRender();
+        alert('가져오기가 완료되었습니다.');
+      }catch(err){
+        alert('올바른 WBS JSON 파일이 아닙니다.');
+      }
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  });
+  document.getElementById('btnPrint').addEventListener('click', function(){ window.print(); });
+  document.getElementById('btnClearAll').addEventListener('click', function(){
+    if(confirm('모든 WBS 데이터를 삭제할까요? 이 작업은 되돌릴 수 없습니다.')){
+      state = { groups: [] };
+      fullRender();
+    }
+  });
+
+  /* ---------------- Init ---------------- */
+  loadHolidayStorage();
+  load();
+  fullRender();
+})();
+</script>
+</body>
+</html>

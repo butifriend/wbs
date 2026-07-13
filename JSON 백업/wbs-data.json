@@ -1,3 +1,246 @@
 {
-  "groups": []
+  "groups": [
+    {
+      "id": "2644c69b-1fce-45f7-9f81-79e9e29f00b4",
+      "category": "",
+      "title": "A10 업무유형별 활용 가이드 업데이트 - 데이터분석 2.0",
+      "tasks": [
+        {
+          "id": "16c28011-db7d-4ebc-a0ed-6a2cd98f7582",
+          "category": "수정",
+          "detail": "업데이트",
+          "assignee": "손규원, 임민주",
+          "md": 6,
+          "start": "2026-07-29",
+          "end": "2026-08-05",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "b0500435-78ae-4611-b012-629964342b3b",
+          "category": "검토",
+          "detail": "설계팀 검토",
+          "assignee": "설계팀",
+          "md": 2,
+          "start": "2026-08-06",
+          "end": "2026-08-07",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "38532ae2-3e9b-46ce-8a73-ecc6cfc7c3a9",
+          "category": "수정",
+          "detail": "활용 가이드 최종 수정",
+          "assignee": "손규원, 임민주",
+          "md": 1,
+          "start": "2026-08-10",
+          "end": "2026-08-10",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "ae04a7db-0461-4842-9afb-800e18109c8d",
+          "category": "배포",
+          "detail": "배포 및 게시",
+          "assignee": "손규원, 임민주",
+          "md": 1,
+          "start": "2026-08-11",
+          "end": "2026-08-11",
+          "endManual": false,
+          "status": "예정"
+        }
+      ],
+      "_md": 10,
+      "_start": "2026-07-29",
+      "_end": "2026-08-11",
+      "_status": "예정"
+    },
+    {
+      "id": "a9974e8a-65a5-4fba-a8bd-8b8fa186214f",
+      "category": "",
+      "title": "A10 업무유형별 활용 가이드 제작 - 교대근무 (병원 & 호텔)",
+      "tasks": [
+        {
+          "id": "22900747-6b8b-4adc-9834-65d345877664",
+          "category": "기획",
+          "detail": "초안 작성",
+          "assignee": "손규원, 임민주",
+          "md": 11,
+          "start": "2026-08-06",
+          "end": "2026-08-21",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "f1dfbc32-7527-42a6-a80b-4644b2a5d4e5",
+          "category": "검토",
+          "detail": "설계팀 검토",
+          "assignee": "설계팀",
+          "md": 2,
+          "start": "2026-08-24",
+          "end": "2026-08-25",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "fd51817f-68ca-4b90-804f-0ceea0d061f3",
+          "category": "수정",
+          "detail": "활용 가이드 최종 수정",
+          "assignee": "손규원, 임민주",
+          "md": 1,
+          "start": "2026-09-10",
+          "end": "2026-09-10",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "7fe51ae1-271c-418f-bf33-4c7ad7332fa9",
+          "category": "배포",
+          "detail": "배포 및 게시",
+          "assignee": "손규원, 임민주",
+          "md": 1,
+          "start": "2026-09-11",
+          "end": "2026-09-11",
+          "endManual": false,
+          "status": "예정"
+        }
+      ],
+      "_md": 15,
+      "_start": "2026-08-06",
+      "_end": "2026-09-11",
+      "_status": "예정"
+    },
+    {
+      "id": "9fe1e2f3-5d44-4c5c-a479-5f18c12d607b",
+      "category": "",
+      "title": "Amaranth H 기능 소개서 제작",
+      "tasks": [
+        {
+          "id": "df42c18f-7403-44ea-bd0f-338e1cd45e10",
+          "category": "교육",
+          "detail": "Amaranth H 모듈별 특장점 교육",
+          "assignee": "손규원, 임민주",
+          "md": 4,
+          "start": "2026-06-15",
+          "end": "2026-06-18",
+          "endManual": false,
+          "status": "완료"
+        },
+        {
+          "id": "1582f4d0-8e96-4ec3-bdd5-338d07c13cee",
+          "category": "기획",
+          "detail": "시나리오 및 템플릿 작성",
+          "assignee": "손규원, 임민주",
+          "md": 2,
+          "start": "2026-06-22",
+          "end": "2026-06-23",
+          "endManual": false,
+          "status": "완료"
+        },
+        {
+          "id": "46096732-0fbe-44e7-aba7-93cefd1680cc",
+          "category": "작성",
+          "detail": "초안 작성 (PMQ Cell, EMR/ERP 설계팀)",
+          "assignee": "손규원, 임민주",
+          "md": 5,
+          "start": "2026-08-24",
+          "end": "2026-08-28",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "d2533a74-dfc1-4aab-935d-a490a385310b",
+          "category": "수정",
+          "detail": "취합 및 리터치",
+          "assignee": "손규원, 임민주",
+          "md": 8,
+          "start": "2026-08-31",
+          "end": "2026-09-09",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "9b4ef4a9-74e3-4cbe-a498-6c4cddd73e19",
+          "category": "검토",
+          "detail": "설계팀 검토 및 수정",
+          "assignee": "설계팀",
+          "md": 2,
+          "start": "2026-09-10",
+          "end": "2026-09-11",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "5375f97a-6acc-406a-b6b7-80df752f582c",
+          "category": "보고",
+          "detail": "최종 리뷰 및 수정 보완",
+          "assignee": "손규원, 임민주",
+          "md": 2,
+          "start": "2026-09-14",
+          "end": "2026-09-15",
+          "endManual": false,
+          "status": "예정"
+        }
+      ],
+      "_md": 23,
+      "_start": "2026-06-15",
+      "_end": "2026-09-15",
+      "_status": "예정"
+    },
+    {
+      "id": "c351426b-158e-4d17-aa06-174d59b186c8",
+      "category": "",
+      "title": "A10 데이터분석2.0 매뉴얼 작성",
+      "tasks": [
+        {
+          "id": "d428680e-b6e1-4c85-92c5-29fa5df1a230",
+          "category": "기획",
+          "detail": "데이터분석2.0 기능 테스트",
+          "assignee": "",
+          "md": 2,
+          "start": "2026-07-10",
+          "end": "2026-07-13",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "b35a7936-4f4a-46fc-bc9c-aad3f734c798",
+          "category": "작성",
+          "detail": "매뉴얼 작성",
+          "assignee": "",
+          "md": 3,
+          "start": "2026-07-14",
+          "end": "2026-07-16",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "73cdb440-478b-468f-8669-52ebd139f20c",
+          "category": "검토",
+          "detail": "설계팀 검토",
+          "assignee": "",
+          "md": 1,
+          "start": "2026-07-20",
+          "end": "2026-07-20",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "94b412b3-8975-4ed3-8039-4a6950a8dab8",
+          "category": "수정",
+          "detail": "수정내용 보완",
+          "assignee": "",
+          "md": 1,
+          "start": "2026-07-21",
+          "end": "2026-07-21",
+          "endManual": false,
+          "status": "예정"
+        }
+      ],
+      "_md": 7,
+      "_start": "2026-07-10",
+      "_end": "2026-07-21",
+      "_status": "예정"
+    }
+  ]
 }

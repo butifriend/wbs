@@ -48,6 +48,7 @@
   button.danger{color:var(--danger); border-color:var(--danger-bg);}
   button.danger:hover{background:var(--danger-bg); border-color:var(--danger);}
   button.small{padding:3px 8px; font-size:12px; border-radius:6px; white-space:nowrap; flex:0 0 auto;}
+  button:disabled{opacity:.35; cursor:not-allowed; pointer-events:none;}
   .spacer{flex:1;}
 
   .summary{display:flex; flex-wrap:wrap; gap:10px 24px; font-size:13px;}
@@ -58,10 +59,10 @@
   .chip.hold{color:var(--st-hold); background:var(--st-hold-bg);}
   .chip.plan{color:var(--st-plan); background:var(--st-plan-bg);}
 
-  table{width:100%; min-width:1294px; border-collapse:collapse; table-layout:fixed;}
+  table{width:100%; min-width:1342px; border-collapse:collapse; table-layout:fixed;}
   col.c-no{width:56px;} col.c-cat{width:90px;} col.c-detail{width:auto;}
   col.c-assignee{width:156px;} col.c-md{width:70px;} col.c-date{width:178px;} col.c-date-end{width:200px;}
-  col.c-status{width:96px;} col.c-actions{width:120px;}
+  col.c-status{width:96px;} col.c-actions{width:168px;}
   thead th{
     background:var(--bg); color:var(--sub); font-size:12px; font-weight:700; text-align:left;
     padding:9px 8px; border-bottom:2px solid var(--border); position:sticky; top:0;
@@ -124,7 +125,8 @@
   .gantt-table .sticky-c2{left:44px;}
   .gantt-table .sticky-c3{left:110px;}
   .gantt-row-group td{background:var(--bg); font-weight:700;}
-  .gantt-row-group td.sticky-c1, .gantt-row-group td.sticky-c2, .gantt-row-group td.sticky-c3{background:var(--group-bg); color:var(--group-text);}
+  .gantt-row-group td.sticky-c1, .gantt-row-group td.sticky-c2{background:var(--group-bg); color:var(--group-text);}
+  .gantt-row-group td.gantt-group-title{background:var(--group-bg); color:var(--group-text); text-align:left; padding-left:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .gantt-week-th.current-week{color:var(--danger);}
   td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#e6e6e6;}
   td.gantt-cell[data-category="기획"]{background:#fff2cc;}
@@ -172,6 +174,7 @@
     <div class="toolbar">
       <button class="primary" id="btnAddGroup">+ 그룹 추가</button>
       <button id="btnHolidays">공휴일 관리</button>
+      <button class="primary" id="btnSaveNow" title="구분/상세업무 등 텍스트 입력은 즉시 간트차트에 반영되지 않습니다. 입력 후 이 버튼을 눌러 반영하세요.">저장</button>
       <div class="spacer"></div>
       <button id="btnExportJson">JSON 내보내기</button>
       <button id="btnImportJsonTrigger">JSON 가져오기</button>
@@ -503,6 +506,26 @@
     tr.appendChild(el('td', {}, ['']));
     const actions = el('td', {class:'actions-cell no-print'});
     const actionsInner = el('div', {class:'actions-inner'});
+    const upProps = {class:'small', title:'그룹 위로 이동', onclick:function(){
+      if(gi>0){
+        const tmp = state.groups[gi-1];
+        state.groups[gi-1] = state.groups[gi];
+        state.groups[gi] = tmp;
+        fullRender();
+      }
+    }};
+    if(gi===0) upProps.disabled = 'disabled';
+    actionsInner.appendChild(el('button', upProps, ['▲']));
+    const downProps = {class:'small', title:'그룹 아래로 이동', onclick:function(){
+      if(gi<state.groups.length-1){
+        const tmp = state.groups[gi+1];
+        state.groups[gi+1] = state.groups[gi];
+        state.groups[gi] = tmp;
+        fullRender();
+      }
+    }};
+    if(gi===state.groups.length-1) downProps.disabled = 'disabled';
+    actionsInner.appendChild(el('button', downProps, ['▼']));
     actionsInner.appendChild(el('button', {class:'small', title:'하위업무 추가', onclick:function(){
       const prev = g.tasks[g.tasks.length-1];
       const start = prev && prev.end ? nextBusinessDay(prev.end) : toISO(new Date());
@@ -728,14 +751,11 @@
     const tbody = el('tbody');
     state.groups.forEach(function(g, gi){
       const gtr = el('tr', {class:'gantt-row-group'});
-      ganttLabelCells((gi+1)+'', g.category, g.title||'(제목없음)').forEach(function(td){ gtr.appendChild(td); });
-      weeks.forEach(function(w){
-        const active = weekOverlaps(w, g._start, g._end);
-        const td = el('td', {class:'gantt-cell'+(isCurrentWeek(w)?' current-week':'')});
-        if(active) td.title = (g.title||'')+' ('+fmtDisplay(g._start)+' ~ '+fmtDisplay(g._end)+', '+g._md+'MD)';
-        gtr.appendChild(td);
-      });
-      gtr.appendChild(el('td', {}, ['']));
+      gtr.appendChild(el('td', {class:'sticky-c1'}, [(gi+1)+'']));
+      gtr.appendChild(el('td', {class:'sticky-c2'}, [g.category||'']));
+      const groupTitleTd = el('td', {class:'gantt-group-title', colspan:String(weeks.length+2)}, [g.title||'(제목없음)']);
+      if(g._start && g._end) groupTitleTd.title = (g.title||'')+' ('+fmtDisplay(g._start)+' ~ '+fmtDisplay(g._end)+', '+g._md+'MD)';
+      gtr.appendChild(groupTitleTd);
       tbody.appendChild(gtr);
 
       g.tasks.forEach(function(t, ti){
@@ -1129,6 +1149,9 @@
     const g = makeGroup();
     g.tasks.push(makeTask());
     state.groups.push(g);
+    fullRender();
+  });
+  document.getElementById('btnSaveNow').addEventListener('click', function(){
     fullRender();
   });
   document.getElementById('btnHolidays').addEventListener('click', function(){

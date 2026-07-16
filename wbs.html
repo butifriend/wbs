@@ -10,7 +10,7 @@
     --accent:#2f6fed; --accent-dark:#1f4fb8; --group-bg:#2f6fed; --group-text:#ffffff;
     --danger:#e5484d; --danger-bg:#fdeaea;
     --st-done:#3b6fd6; --st-done-bg:#e8eefc;
-    --st-progress:#d99a1b; --st-progress-bg:#fdf2dc;
+    --st-progress:#70ad47; --st-progress-bg:#e2f0d9;
     --st-hold:#d1453b; --st-hold-bg:#fbe7e6;
     --st-plan:#6b7280; --st-plan-bg:#eef0f2;
     --shadow: 0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.06);
@@ -127,11 +127,13 @@
   .gantt-row-group td.sticky-c1, .gantt-row-group td.sticky-c2, .gantt-row-group td.sticky-c3{background:var(--bg);}
   .gantt-week-th.current-week{color:var(--danger);}
   td.gantt-cell.current-week{background:rgba(230,90,80,.10);}
-  td.gantt-cell[data-status]{color:#fff; font-size:0;}
-  td.gantt-cell[data-status=완료]{background:var(--st-done);}
-  td.gantt-cell[data-status=진행]{background:var(--st-progress);}
-  td.gantt-cell[data-status=보류]{background:var(--st-hold);}
-  td.gantt-cell[data-status=예정]{background:var(--st-plan);}
+  td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#e6e6e6;}
+  td.gantt-cell[data-category="작성"]{background:#fff2cc;}
+  td.gantt-cell[data-category="수정"]{background:#fbe5d6;}
+  td.gantt-cell[data-category="검토"]{background:#e2f0d9;}
+  td.gantt-cell[data-category="테스트"]{background:#ededed;}
+  td.gantt-cell[data-category="보고"]{background:#deebf7;}
+  td.gantt-cell[data-category="배포"]{background:#dae3f3;}
 
   /* Modal */
   .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50;}
@@ -732,7 +734,6 @@
       weeks.forEach(function(w){
         const active = weekOverlaps(w, g._start, g._end);
         const td = el('td', {class:'gantt-cell'+(isCurrentWeek(w)?' current-week':'')});
-        if(active) td.setAttribute('data-status', g._status||'예정');
         if(active) td.title = (g.title||'')+' ('+fmtDisplay(g._start)+' ~ '+fmtDisplay(g._end)+', '+g._md+'MD)';
         gtr.appendChild(td);
       });
@@ -745,8 +746,8 @@
         weeks.forEach(function(w){
           const active = weekOverlaps(w, t.start, t.end);
           const td = el('td', {class:'gantt-cell'+(isCurrentWeek(w)?' current-week':'')});
-          if(active) td.setAttribute('data-status', t.status);
-          if(active) td.title = (t.detail||'')+' ('+fmtDisplay(t.start)+' ~ '+fmtDisplay(t.end)+', '+t.md+'MD)';
+          if(active) td.setAttribute('data-category', t.category || '기타');
+          if(active) td.title = (t.category?t.category+' · ':'')+(t.detail||'')+' ('+fmtDisplay(t.start)+' ~ '+fmtDisplay(t.end)+', '+t.md+'MD)';
           ttr.appendChild(td);
         });
         ttr.appendChild(el('td', {}, [t.status]));

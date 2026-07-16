@@ -124,7 +124,7 @@
   .gantt-table .sticky-c2{left:44px;}
   .gantt-table .sticky-c3{left:110px;}
   .gantt-row-group td{background:var(--bg); font-weight:700;}
-  .gantt-row-group td.sticky-c1, .gantt-row-group td.sticky-c2, .gantt-row-group td.sticky-c3{background:var(--bg);}
+  .gantt-row-group td.sticky-c1, .gantt-row-group td.sticky-c2, .gantt-row-group td.sticky-c3{background:var(--group-bg); color:var(--group-text);}
   .gantt-week-th.current-week{color:var(--danger);}
   td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#e6e6e6;}
   td.gantt-cell[data-category="기획"]{background:#fff2cc;}
@@ -500,9 +500,7 @@
     tr.appendChild(el('td', {class:'col-md'}, [String(g._md||0)]));
     tr.appendChild(el('td', {}, [g._start ? fmtDisplay(g._start) : '']));
     tr.appendChild(el('td', {}, [g._end ? fmtDisplay(g._end) : '']));
-    tr.appendChild(el('td', {}, [
-      el('span', {class:'status-pill', 'data-status': g._status||'예정'}, [g._status||'예정'])
-    ]));
+    tr.appendChild(el('td', {}, ['']));
     const actions = el('td', {class:'actions-cell no-print'});
     const actionsInner = el('div', {class:'actions-inner'});
     actionsInner.appendChild(el('button', {class:'small', title:'하위업무 추가', onclick:function(){
@@ -737,7 +735,7 @@
         if(active) td.title = (g.title||'')+' ('+fmtDisplay(g._start)+' ~ '+fmtDisplay(g._end)+', '+g._md+'MD)';
         gtr.appendChild(td);
       });
-      gtr.appendChild(el('td', {}, [g._status||'']));
+      gtr.appendChild(el('td', {}, ['']));
       tbody.appendChild(gtr);
 
       g.tasks.forEach(function(t, ti){
@@ -927,12 +925,122 @@
   function buildWbsRows(){
     const rows = [{style:1, cells:['순번','구분','상세업무','담당자','M/D','시작일','종료일','상태']}];
     state.groups.forEach(function(g, gi){
-      rows.push({style:2, cells:[String(gi+1), g.category||'', g.title||'', '', g._md||0, '', '', g._status||'']});
+      rows.push({style:2, cells:[String(gi+1), g.category||'', g.title||'', '', g._md||0, '', '', '']});
       g.tasks.forEach(function(t, ti){
         rows.push({style:0, cells:[(gi+1)+'.'+(ti+1), t.category||'', t.detail||'', t.assignee||'', Number(t.md)||0, fmtDisplay(t.start), fmtDisplay(t.end), t.status||'']});
       });
     });
     return rows;
+  }
+
+  // Category -> cellXfs style index used by the Gantt sheet (see STYLES in exportXlsx)
+  function ganttCategoryStyle(category){
+    const map = {'작성':3, '기획':3, '수정':4, '검토':5, '테스트':6, '보고':7, '배포':8};
+    return Object.prototype.hasOwnProperty.call(map, category) ? map[category] : 9;
+  }
+
+  function buildGanttSheetXml(){
+    let allTasks = [];
+    state.groups.forEach(function(g){ allTasks = allTasks.concat(g.tasks); });
+    const validStarts = allTasks.map(function(t){ return t.start; }).filter(Boolean);
+    const validEnds = allTasks.map(function(t){ return t.end; }).filter(Boolean);
+    if(validStarts.length===0 || validEnds.length===0){
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+        '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>표시할 일정 데이터가 없습니다.</t></is></c></row></sheetData>' +
+        '</worksheet>';
+    }
+    const minStart = validStarts.slice().sort()[0];
+    const maxEnd = validEnds.slice().sort().slice(-1)[0];
+    const weeks = buildWeeks(minStart, maxEnd);
+    const labelCols = 3;
+    const statusCol = labelCols + weeks.length;
+
+    const colWidths = [7,9,30].concat(weeks.map(function(){ return 3.5; })).concat([9]);
+    let cols = '<cols>';
+    colWidths.forEach(function(w, i){ cols += '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>'; });
+    cols += '</cols>';
+
+    const merges = [];
+    merges.push(colLetter(0)+'1:'+colLetter(0)+'2');
+    merges.push(colLetter(1)+'1:'+colLetter(1)+'2');
+    merges.push(colLetter(2)+'1:'+colLetter(2)+'2');
+    merges.push(colLetter(statusCol)+'1:'+colLetter(statusCol)+'2');
+
+    const row1 = [];
+    const row2 = [];
+    row1.push({col:0, value:'순번', style:1});
+    row1.push({col:1, value:'구분', style:1});
+    row1.push({col:2, value:'상세업무', style:1});
+    row1.push({col:statusCol, value:'상태', style:1});
+
+    let wi = 0;
+    while(wi<weeks.length){
+      const m = weeks[wi].start.getMonth();
+      let span = 0;
+      while(wi+span<weeks.length && weeks[wi+span].start.getMonth()===m) span++;
+      const startCol = labelCols+wi;
+      row1.push({col:startCol, value:(m+1)+'월', style:1});
+      if(span>1) merges.push(colLetter(startCol)+'1:'+colLetter(startCol+span-1)+'1');
+      wi += span;
+    }
+
+    const wCounters = {};
+    weeks.forEach(function(w, idx){
+      const key = w.start.getFullYear()+'-'+w.start.getMonth();
+      wCounters[key] = (wCounters[key]||0)+1;
+      row2.push({col: labelCols+idx, value: wCounters[key]+'w', style:1});
+    });
+
+    const cellsByRow = [row1, row2];
+    state.groups.forEach(function(g, gi){
+      const grow = [];
+      grow.push({col:0, value:String(gi+1), style:2});
+      grow.push({col:1, value:g.category||'', style:2});
+      grow.push({col:2, value:g.title||'(제목없음)', style:2});
+      grow.push({col:statusCol, value:'', style:2});
+      cellsByRow.push(grow);
+
+      g.tasks.forEach(function(t, ti){
+        const trow = [];
+        trow.push({col:0, value:(gi+1)+'.'+(ti+1), style:0});
+        trow.push({col:1, value:t.category||'', style:0});
+        trow.push({col:2, value:t.detail||'', style:0});
+        weeks.forEach(function(w, wIdx){
+          if(weekOverlaps(w, t.start, t.end)){
+            trow.push({col: labelCols+wIdx, value:'', style: ganttCategoryStyle(t.category)});
+          }
+        });
+        trow.push({col:statusCol, value:t.status||'', style:0});
+        cellsByRow.push(trow);
+      });
+    });
+
+    let rowsXml = '';
+    cellsByRow.forEach(function(rowCells, ri){
+      const r = ri+1;
+      let cellsXml = '';
+      rowCells.forEach(function(cell){
+        const ref = colLetter(cell.col)+r;
+        if(cell.value === '' || cell.value == null){
+          cellsXml += '<c r="'+ref+'" s="'+cell.style+'"/>';
+        } else if(typeof cell.value === 'number'){
+          cellsXml += '<c r="'+ref+'" s="'+cell.style+'"><v>'+cell.value+'</v></c>';
+        } else {
+          cellsXml += '<c r="'+ref+'" s="'+cell.style+'" t="inlineStr"><is><t xml:space="preserve">'+xmlEscape(cell.value)+'</t></is></c>';
+        }
+      });
+      rowsXml += '<row r="'+r+'">'+cellsXml+'</row>';
+    });
+    const mergeXml = merges.length ? ('<mergeCells count="'+merges.length+'">'+merges.map(function(m){ return '<mergeCell ref="'+m+'"/>'; }).join('')+'</mergeCells>') : '';
+
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      cols +
+      '<sheetData>'+rowsXml+'</sheetData>' +
+      mergeXml +
+      '<pageSetup orientation="landscape"/>' +
+      '</worksheet>';
   }
   function exportXlsx(){
     const CONTENT_TYPES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -941,6 +1049,7 @@
       '<Default Extension="xml" ContentType="application/xml"/>' +
       '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
       '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+      '<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
       '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
       '</Types>';
     const RELS_ROOT = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -949,12 +1058,16 @@
       '</Relationships>';
     const WORKBOOK = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-      '<sheets><sheet name="WBS" sheetId="1" r:id="rId1"/></sheets>' +
+      '<sheets>' +
+      '<sheet name="WBS" sheetId="1" r:id="rId1"/>' +
+      '<sheet name="간트차트" sheetId="2" r:id="rId3"/>' +
+      '</sheets>' +
       '</workbook>';
     const WORKBOOK_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
       '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>' +
       '</Relationships>';
     const STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
@@ -963,21 +1076,36 @@
       '<font><b/><sz val="10"/><name val="맑은 고딕"/></font>' +
       '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="맑은 고딕"/></font>' +
       '</fonts>' +
-      '<fills count="3">' +
+      '<fills count="10">' +
       '<fill><patternFill patternType="none"/></fill>' +
       '<fill><patternFill patternType="gray125"/></fill>' +
       '<fill><patternFill patternType="solid"><fgColor rgb="FF2F6FED"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFFBE5D6"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFE2F0D9"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFEDEDED"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFDEEBF7"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFDAE3F3"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFE6E6E6"/><bgColor indexed="64"/></patternFill></fill>' +
       '</fills>' +
       '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
       '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-      '<cellXfs count="3">' +
+      '<cellXfs count="10">' +
       '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
       '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
       '<xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>' +
+      '<xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/>' +
+      '<xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/>' +
+      '<xf numFmtId="0" fontId="0" fillId="5" borderId="0" xfId="0" applyFill="1"/>' +
+      '<xf numFmtId="0" fontId="0" fillId="6" borderId="0" xfId="0" applyFill="1"/>' +
+      '<xf numFmtId="0" fontId="0" fillId="7" borderId="0" xfId="0" applyFill="1"/>' +
+      '<xf numFmtId="0" fontId="0" fillId="8" borderId="0" xfId="0" applyFill="1"/>' +
+      '<xf numFmtId="0" fontId="0" fillId="9" borderId="0" xfId="0" applyFill="1"/>' +
       '</cellXfs>' +
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
       '</styleSheet>';
-    const SHEET = buildSheetXml(buildWbsRows());
+    const SHEET1 = buildSheetXml(buildWbsRows());
+    const SHEET2 = buildGanttSheetXml();
 
     const zipBlob = makeZip([
       {name:'[Content_Types].xml', data:CONTENT_TYPES},
@@ -985,7 +1113,8 @@
       {name:'xl/workbook.xml', data:WORKBOOK},
       {name:'xl/_rels/workbook.xml.rels', data:WORKBOOK_RELS},
       {name:'xl/styles.xml', data:STYLES},
-      {name:'xl/worksheets/sheet1.xml', data:SHEET}
+      {name:'xl/worksheets/sheet1.xml', data:SHEET1},
+      {name:'xl/worksheets/sheet2.xml', data:SHEET2}
     ]);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(zipBlob);

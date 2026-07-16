@@ -2,7 +2,7 @@
   "groups": [
     {
       "id": "2644c69b-1fce-45f7-9f81-79e9e29f00b4",
-      "category": "",
+      "category": "영업자료",
       "title": "A10 업무유형별 활용 가이드 업데이트 - 데이터분석 2.0",
       "tasks": [
         {
@@ -57,7 +57,7 @@
     },
     {
       "id": "a9974e8a-65a5-4fba-a8bd-8b8fa186214f",
-      "category": "",
+      "category": "영업자료",
       "title": "A10 업무유형별 활용 가이드 제작 - 교대근무 (병원 & 호텔)",
       "tasks": [
         {
@@ -201,7 +201,7 @@
           "start": "2026-07-10",
           "end": "2026-07-13",
           "endManual": false,
-          "status": "예정"
+          "status": "완료"
         },
         {
           "id": "b35a7936-4f4a-46fc-bc9c-aad3f734c798",
@@ -212,7 +212,7 @@
           "start": "2026-07-14",
           "end": "2026-07-16",
           "endManual": false,
-          "status": "예정"
+          "status": "완료"
         },
         {
           "id": "73cdb440-478b-468f-8669-52ebd139f20c",

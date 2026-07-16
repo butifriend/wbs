@@ -1,6 +1,116 @@
 {
   "groups": [
     {
+      "id": "c351426b-158e-4d17-aa06-174d59b186c8",
+      "category": "영업자료",
+      "title": "A10 데이터분석2.0 매뉴얼 작성",
+      "tasks": [
+        {
+          "id": "d428680e-b6e1-4c85-92c5-29fa5df1a230",
+          "category": "기획",
+          "detail": "데이터분석2.0 기능 테스트",
+          "assignee": "손규원, 임민주",
+          "md": 2,
+          "start": "2026-07-10",
+          "end": "2026-07-13",
+          "endManual": false,
+          "status": "완료"
+        },
+        {
+          "id": "b35a7936-4f4a-46fc-bc9c-aad3f734c798",
+          "category": "작성",
+          "detail": "매뉴얼 작성",
+          "assignee": "손규원, 임민주",
+          "md": 3,
+          "start": "2026-07-14",
+          "end": "2026-07-16",
+          "endManual": false,
+          "status": "완료"
+        },
+        {
+          "id": "73cdb440-478b-468f-8669-52ebd139f20c",
+          "category": "검토",
+          "detail": "설계팀 검토",
+          "assignee": "설계팀",
+          "md": 1,
+          "start": "2026-07-20",
+          "end": "2026-07-20",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "94b412b3-8975-4ed3-8039-4a6950a8dab8",
+          "category": "수정",
+          "detail": "수정내용 보완",
+          "assignee": "손규원, 임민주",
+          "md": 1,
+          "start": "2026-07-21",
+          "end": "2026-07-21",
+          "endManual": false,
+          "status": "예정"
+        }
+      ],
+      "_md": 7,
+      "_start": "2026-07-10",
+      "_end": "2026-07-21",
+      "_status": "예정"
+    },
+    {
+      "id": "ec0a022b-f6fc-4b02-bacb-9d0b7f0042bb",
+      "category": "영업자료",
+      "title": "A10 비영리 제안서 디자인 본 검수",
+      "tasks": [
+        {
+          "id": "40a4367c-fcfa-49e8-bd40-4db93fe09e4c",
+          "category": "검토",
+          "detail": "디자인본을 원본 문서와 비교 및 수정",
+          "assignee": "손규원, 임민주, 김세연",
+          "md": 2,
+          "start": "2026-07-20",
+          "end": "2026-07-21",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "d0824115-cf99-4aa3-b6b3-279c6c902aa3",
+          "category": "배포",
+          "detail": "배포 및 게시",
+          "assignee": "안현정, 임민주",
+          "md": 1,
+          "start": "2026-07-22",
+          "end": "2026-07-22",
+          "endManual": false,
+          "status": "예정"
+        }
+      ],
+      "_md": 3,
+      "_start": "2026-07-20",
+      "_end": "2026-07-22",
+      "_status": "예정"
+    },
+    {
+      "id": "6f71cb1c-e5d6-49c6-9a33-78e281bfbd01",
+      "category": "개발지원",
+      "title": "ERP개발본부_업무분장 및 절차 문서 업데이트",
+      "tasks": [
+        {
+          "id": "871dc15c-3b12-4623-862d-e531457668fb",
+          "category": "수정",
+          "detail": "업무분장 및 절차 업데이트",
+          "assignee": "임민주",
+          "md": 1,
+          "start": "2026-07-27",
+          "end": "2026-07-27",
+          "endManual": false,
+          "status": "예정"
+        }
+      ],
+      "_md": 1,
+      "_start": "2026-07-27",
+      "_end": "2026-07-27",
+      "_status": "예정"
+    },
+    {
       "id": "2644c69b-1fce-45f7-9f81-79e9e29f00b4",
       "category": "영업자료",
       "title": "A10 업무유형별 활용 가이드 업데이트 - 데이터분석 2.0",
@@ -112,7 +222,7 @@
     },
     {
       "id": "9fe1e2f3-5d44-4c5c-a479-5f18c12d607b",
-      "category": "",
+      "category": "영업자료",
       "title": "Amaranth H 기능 소개서 제작",
       "tasks": [
         {
@@ -123,17 +233,6 @@
           "md": 4,
           "start": "2026-06-15",
           "end": "2026-06-18",
-          "endManual": false,
-          "status": "완료"
-        },
-        {
-          "id": "1582f4d0-8e96-4ec3-bdd5-338d07c13cee",
-          "category": "기획",
-          "detail": "시나리오 및 템플릿 작성",
-          "assignee": "손규원, 임민주",
-          "md": 2,
-          "start": "2026-06-22",
-          "end": "2026-06-23",
           "endManual": false,
           "status": "완료"
         },
@@ -182,64 +281,9 @@
           "status": "예정"
         }
       ],
-      "_md": 23,
+      "_md": 21,
       "_start": "2026-06-15",
       "_end": "2026-09-15",
-      "_status": "예정"
-    },
-    {
-      "id": "c351426b-158e-4d17-aa06-174d59b186c8",
-      "category": "",
-      "title": "A10 데이터분석2.0 매뉴얼 작성",
-      "tasks": [
-        {
-          "id": "d428680e-b6e1-4c85-92c5-29fa5df1a230",
-          "category": "기획",
-          "detail": "데이터분석2.0 기능 테스트",
-          "assignee": "",
-          "md": 2,
-          "start": "2026-07-10",
-          "end": "2026-07-13",
-          "endManual": false,
-          "status": "완료"
-        },
-        {
-          "id": "b35a7936-4f4a-46fc-bc9c-aad3f734c798",
-          "category": "작성",
-          "detail": "매뉴얼 작성",
-          "assignee": "",
-          "md": 3,
-          "start": "2026-07-14",
-          "end": "2026-07-16",
-          "endManual": false,
-          "status": "완료"
-        },
-        {
-          "id": "73cdb440-478b-468f-8669-52ebd139f20c",
-          "category": "검토",
-          "detail": "설계팀 검토",
-          "assignee": "",
-          "md": 1,
-          "start": "2026-07-20",
-          "end": "2026-07-20",
-          "endManual": false,
-          "status": "예정"
-        },
-        {
-          "id": "94b412b3-8975-4ed3-8039-4a6950a8dab8",
-          "category": "수정",
-          "detail": "수정내용 보완",
-          "assignee": "",
-          "md": 1,
-          "start": "2026-07-21",
-          "end": "2026-07-21",
-          "endManual": false,
-          "status": "예정"
-        }
-      ],
-      "_md": 7,
-      "_start": "2026-07-10",
-      "_end": "2026-07-21",
       "_status": "예정"
     }
   ]

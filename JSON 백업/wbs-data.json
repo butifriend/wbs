@@ -36,7 +36,7 @@
           "start": "2026-07-20",
           "end": "2026-07-20",
           "endManual": false,
-          "status": "예정"
+          "status": "완료"
         },
         {
           "id": "94b412b3-8975-4ed3-8039-4a6950a8dab8",
@@ -47,13 +47,13 @@
           "start": "2026-07-21",
           "end": "2026-07-21",
           "endManual": false,
-          "status": "예정"
+          "status": "완료"
         }
       ],
       "_md": 7,
       "_start": "2026-07-10",
       "_end": "2026-07-21",
-      "_status": "예정"
+      "_status": "완료"
     },
     {
       "id": "ec0a022b-f6fc-4b02-bacb-9d0b7f0042bb",
@@ -69,7 +69,7 @@
           "start": "2026-07-20",
           "end": "2026-07-21",
           "endManual": false,
-          "status": "예정"
+          "status": "완료"
         },
         {
           "id": "d0824115-cf99-4aa3-b6b3-279c6c902aa3",
@@ -80,13 +80,13 @@
           "start": "2026-07-22",
           "end": "2026-07-22",
           "endManual": false,
-          "status": "예정"
+          "status": "완료"
         }
       ],
       "_md": 3,
       "_start": "2026-07-20",
       "_end": "2026-07-22",
-      "_status": "예정"
+      "_status": "완료"
     },
     {
       "id": "6b6abc34-b8f2-4b1e-ac88-929f411f26e2",
@@ -102,7 +102,7 @@
           "start": "2026-07-22",
           "end": "2026-07-23",
           "endManual": false,
-          "status": "예정"
+          "status": "완료"
         },
         {
           "id": "8d1f9035-7f7b-4272-a053-0e3239d4d535",
@@ -113,12 +113,23 @@
           "start": "2026-07-24",
           "end": "2026-07-24",
           "endManual": false,
+          "status": "완료"
+        },
+        {
+          "id": "f9e02f0c-2584-40d2-85bc-016219e7a53e",
+          "category": "검토",
+          "detail": "",
+          "assignee": "",
+          "md": 1,
+          "start": "2026-07-27",
+          "end": "2026-07-27",
+          "endManual": false,
           "status": "예정"
         }
       ],
-      "_md": 3,
+      "_md": 4,
       "_start": "2026-07-22",
-      "_end": "2026-07-24",
+      "_end": "2026-07-27",
       "_status": "예정"
     },
     {
@@ -318,6 +329,39 @@
       "_start": "2026-06-15",
       "_end": "2026-09-15",
       "_status": "예정"
+    },
+    {
+      "id": "09bb8cc7-afce-4561-b030-4c7a9ad1bf2f",
+      "category": "",
+      "title": "A H 제안서 디자인 본 검수",
+      "tasks": [
+        {
+          "id": "cc021fe8-7846-4eb2-94b6-698d77d39130",
+          "category": "수정",
+          "detail": "디자인본을 원본 문서와 비교 및 수정",
+          "assignee": "손규원, 임민주",
+          "md": 1,
+          "start": "2026-07-29",
+          "end": "2026-07-29",
+          "endManual": false,
+          "status": "진행"
+        },
+        {
+          "id": "e9c40d79-62e9-4d0e-9565-95ed5e8d8a11",
+          "category": "배포",
+          "detail": "배포 및 게시",
+          "assignee": "손규원, 임민주",
+          "md": 1,
+          "start": "2026-07-30",
+          "end": "2026-07-30",
+          "endManual": false,
+          "status": "예정"
+        }
+      ],
+      "_md": 2,
+      "_start": "2026-07-29",
+      "_end": "2026-07-30",
+      "_status": "진행"
     }
   ]
 }

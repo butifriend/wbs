@@ -99,9 +99,9 @@
           "detail": "디자인본을 원본 문서와 비교 및 수정",
           "assignee": "손규원, 임민주",
           "md": 1,
-          "start": "2026-07-29",
-          "end": "2026-07-29",
-          "endManual": false,
+          "start": "2026-07-28",
+          "end": "2026-07-30",
+          "endManual": true,
           "status": "진행"
         },
         {
@@ -110,15 +110,15 @@
           "detail": "배포 및 게시",
           "assignee": "손규원, 임민주",
           "md": 1,
-          "start": "2026-07-30",
-          "end": "2026-07-30",
+          "start": "2026-07-31",
+          "end": "2026-07-31",
           "endManual": false,
           "status": "예정"
         }
       ],
       "_md": 2,
-      "_start": "2026-07-29",
-      "_end": "2026-07-30",
+      "_start": "2026-07-28",
+      "_end": "2026-07-31",
       "_status": "진행"
     },
     {
@@ -128,41 +128,74 @@
       "tasks": [
         {
           "id": "155a80cd-af18-494d-8a2d-ede36e4867ed",
-          "category": "검토",
+          "category": "수정",
           "detail": "회계관리 취합본 검토 및 수정",
           "assignee": "임민주",
           "md": 2,
           "start": "2026-07-22",
-          "end": "2026-07-23",
-          "endManual": false,
+          "end": "2026-07-24",
+          "endManual": true,
           "status": "완료"
         },
         {
           "id": "8d1f9035-7f7b-4272-a053-0e3239d4d535",
-          "category": "검토",
+          "category": "수정",
           "detail": "임직원업무관리 취합본 검토 및 수정",
-          "assignee": "임민주",
-          "md": 1,
-          "start": "2026-07-24",
-          "end": "2026-07-24",
-          "endManual": false,
-          "status": "완료"
-        },
-        {
-          "id": "f9e02f0c-2584-40d2-85bc-016219e7a53e",
-          "category": "검토",
-          "detail": "예산관리 취합본 제작",
           "assignee": "임민주",
           "md": 1,
           "start": "2026-07-27",
           "end": "2026-07-27",
+          "endManual": true,
+          "status": "완료"
+        },
+        {
+          "id": "f9e02f0c-2584-40d2-85bc-016219e7a53e",
+          "category": "수정",
+          "detail": "인사관리 매뉴얼 취합본 검수 및 리터치",
+          "assignee": "임민주, 김세연",
+          "md": 1,
+          "start": "2026-07-28",
+          "end": "2026-07-28",
+          "endManual": false,
+          "status": "완료"
+        },
+        {
+          "id": "542b647d-1912-4a05-943f-eae6d4abd208",
+          "category": "수정",
+          "detail": "예산/자산관리 매뉴얼 취합본 제작 및 검수 ",
+          "assignee": "임민주",
+          "md": 1,
+          "start": "2026-07-29",
+          "end": "2026-07-29",
+          "endManual": false,
+          "status": "완료"
+        },
+        {
+          "id": "05190494-8fa2-4b4c-85f1-44e19ae156ac",
+          "category": "수정",
+          "detail": "물류관리 매뉴얼 취합본 제작 및 검수",
+          "assignee": "임민주, 김세연",
+          "md": 1,
+          "start": "2026-07-30",
+          "end": "2026-07-31",
+          "endManual": true,
+          "status": "예정"
+        },
+        {
+          "id": "28bf9d72-f2ac-4675-862c-7c958dfec87a",
+          "category": "배포",
+          "detail": "배포 및 게시",
+          "assignee": "손규원, 임민주",
+          "md": 1,
+          "start": "2026-08-03",
+          "end": "2026-08-03",
           "endManual": false,
           "status": "예정"
         }
       ],
-      "_md": 4,
+      "_md": 7,
       "_start": "2026-07-22",
-      "_end": "2026-07-27",
+      "_end": "2026-08-03",
       "_status": "예정"
     },
     {
@@ -175,9 +208,9 @@
           "category": "수정",
           "detail": "업데이트",
           "assignee": "손규원, 임민주",
-          "md": 6,
-          "start": "2026-07-29",
-          "end": "2026-08-05",
+          "md": 5,
+          "start": "2026-08-03",
+          "end": "2026-08-07",
           "endManual": false,
           "status": "예정"
         },
@@ -187,8 +220,8 @@
           "detail": "설계팀 검토",
           "assignee": "설계팀",
           "md": 2,
-          "start": "2026-08-06",
-          "end": "2026-08-07",
+          "start": "2026-08-10",
+          "end": "2026-08-11",
           "endManual": false,
           "status": "예정"
         },
@@ -198,8 +231,8 @@
           "detail": "활용 가이드 최종 수정",
           "assignee": "손규원, 임민주",
           "md": 1,
-          "start": "2026-08-10",
-          "end": "2026-08-10",
+          "start": "2026-08-12",
+          "end": "2026-08-12",
           "endManual": false,
           "status": "예정"
         },
@@ -209,15 +242,15 @@
           "detail": "배포 및 게시",
           "assignee": "손규원, 임민주",
           "md": 1,
-          "start": "2026-08-11",
-          "end": "2026-08-11",
+          "start": "2026-08-13",
+          "end": "2026-08-13",
           "endManual": false,
           "status": "예정"
         }
       ],
-      "_md": 10,
-      "_start": "2026-07-29",
-      "_end": "2026-08-11",
+      "_md": 9,
+      "_start": "2026-08-03",
+      "_end": "2026-08-13",
       "_status": "예정"
     },
     {
@@ -228,51 +261,62 @@
         {
           "id": "22900747-6b8b-4adc-9834-65d345877664",
           "category": "기획",
-          "detail": "초안 작성",
+          "detail": "병원 & 호텔 교대근무 자료 조사 및 테스트",
           "assignee": "손규원, 임민주",
-          "md": 11,
-          "start": "2026-08-06",
+          "md": 5,
+          "start": "2026-08-14",
           "end": "2026-08-21",
           "endManual": false,
           "status": "예정"
         },
         {
           "id": "f1dfbc32-7527-42a6-a80b-4644b2a5d4e5",
-          "category": "검토",
-          "detail": "설계팀 검토",
+          "category": "작성",
+          "detail": "초안 작성",
           "assignee": "설계팀",
-          "md": 2,
-          "start": "2026-08-24",
-          "end": "2026-08-25",
+          "md": 6,
+          "start": "2026-09-10",
+          "end": "2026-09-17",
           "endManual": false,
           "status": "예정"
         },
         {
           "id": "fd51817f-68ca-4b90-804f-0ceea0d061f3",
-          "category": "수정",
-          "detail": "활용 가이드 최종 수정",
+          "category": "검토",
+          "detail": "설계팀 검토",
           "assignee": "손규원, 임민주",
-          "md": 1,
-          "start": "2026-09-10",
-          "end": "2026-09-10",
+          "md": 2,
+          "start": "2026-09-18",
+          "end": "2026-09-21",
           "endManual": false,
           "status": "예정"
         },
         {
           "id": "7fe51ae1-271c-418f-bf33-4c7ad7332fa9",
+          "category": "수정",
+          "detail": "활용 가이드 최종 수정",
+          "assignee": "손규원, 임민주",
+          "md": 1,
+          "start": "2026-09-22",
+          "end": "2026-09-22",
+          "endManual": false,
+          "status": "예정"
+        },
+        {
+          "id": "04d12a83-ddb8-4cd7-b349-f9a04bc1b6fb",
           "category": "배포",
           "detail": "배포 및 게시",
           "assignee": "손규원, 임민주",
           "md": 1,
-          "start": "2026-09-11",
-          "end": "2026-09-11",
+          "start": "2026-09-23",
+          "end": "2026-09-23",
           "endManual": false,
           "status": "예정"
         }
       ],
       "_md": 15,
-      "_start": "2026-08-06",
-      "_end": "2026-09-11",
+      "_start": "2026-08-14",
+      "_end": "2026-09-23",
       "_status": "예정"
     },
     {
@@ -286,15 +330,15 @@
           "detail": "업무분장 및 절차 업데이트",
           "assignee": "임민주",
           "md": 1,
-          "start": "2026-07-27",
-          "end": "2026-07-27",
+          "start": "2026-09-18",
+          "end": "2026-09-18",
           "endManual": false,
           "status": "예정"
         }
       ],
       "_md": 1,
-      "_start": "2026-07-27",
-      "_end": "2026-07-27",
+      "_start": "2026-09-18",
+      "_end": "2026-09-18",
       "_status": "예정"
     },
     {

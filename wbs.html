@@ -59,10 +59,10 @@
   .chip.hold{color:var(--st-hold); background:var(--st-hold-bg);}
   .chip.plan{color:var(--st-plan); background:var(--st-plan-bg);}
 
-  table{width:100%; min-width:1342px; border-collapse:collapse; table-layout:fixed;}
+  table{width:100%; min-width:1294px; border-collapse:collapse; table-layout:fixed;}
   col.c-no{width:56px;} col.c-cat{width:90px;} col.c-detail{width:auto;}
   col.c-assignee{width:156px;} col.c-md{width:70px;} col.c-date{width:178px;} col.c-date-end{width:200px;}
-  col.c-status{width:96px;} col.c-actions{width:168px;}
+  col.c-status{width:96px;} col.c-actions{width:120px;}
   thead th{
     background:var(--bg); color:var(--sub); font-size:12px; font-weight:700; text-align:left;
     padding:9px 8px; border-bottom:2px solid var(--border); position:sticky; top:0;
@@ -75,6 +75,11 @@
   tr.group-row input{background:transparent; color:var(--group-text); font-weight:700;}
   tr.group-row input::placeholder{color:rgba(255,255,255,.7);}
   tr.group-row input:focus{color:var(--text);}
+  tr.group-row, tr.task-row{cursor:grab;}
+  tr.group-row input, tr.task-row input, tr.group-row select, tr.task-row select, tr.group-row button, tr.task-row button{cursor:auto;}
+  tr.dragging{opacity:.35;}
+  .collapse-toggle{color:inherit; font-size:11px; padding:2px;}
+  tr.group-row .collapse-toggle:hover{color:rgba(255,255,255,.7);}
   tr.task-row:hover td{background:rgba(47,111,237,.05);}
   input[type=text], input[type=number], input[type=date], select{
     width:100%; padding:5px 6px; border:1px solid transparent; border-radius:6px;
@@ -91,6 +96,12 @@
   .reset-btn{border:none; background:none; cursor:pointer; color:var(--sub); font-size:13px; padding:2px 4px; flex:0 0 auto;}
   .reset-btn:hover{color:var(--accent);}
   .dow{font-size:11px; color:var(--sub); white-space:nowrap; flex:0 0 auto;}
+  .sync-badge{display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:8px; font-size:12px; font-weight:600; white-space:nowrap;}
+  .sync-badge[data-state=ok]{color:var(--st-done); background:var(--st-done-bg);}
+  .sync-badge[data-state=syncing]{color:var(--st-progress); background:var(--st-progress-bg);}
+  .sync-badge[data-state=error]{color:var(--danger); background:var(--danger-bg);}
+  .sync-url-input{width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:8px; background:var(--panel); color:var(--text); font:inherit; margin-bottom:8px; box-sizing:border-box;}
+  .sync-actions{display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
   .weekend-warn{color:var(--danger);}
 
   select[data-field=status]{font-weight:600;}
@@ -174,7 +185,9 @@
     <div class="toolbar">
       <button class="primary" id="btnAddGroup">+ 그룹 추가</button>
       <button id="btnHolidays">공휴일 관리</button>
+      <button id="btnSyncSettings">동기화 설정</button>
       <button class="primary" id="btnSaveNow" title="구분/상세업무 등 텍스트 입력은 즉시 간트차트에 반영되지 않습니다. 입력 후 이 버튼을 눌러 반영하세요.">저장</button>
+      <span id="syncBadge" class="sync-badge" style="display:none;"></span>
       <div class="spacer"></div>
       <button id="btnExportJson">JSON 내보내기</button>
       <button id="btnImportJsonTrigger">JSON 가져오기</button>
@@ -234,6 +247,27 @@
     <div class="modal-footer">
       <button class="danger small" id="hdReset">기본값으로 초기화</button>
       <button class="small" id="hdClose">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="syncModal">
+  <div class="modal">
+    <h2>구글 시트 동기화 설정</h2>
+    <p style="font-size:12px; color:var(--sub); line-height:1.6; margin-top:-6px;">
+      Google Apps Script Web App 배포 URL을 등록하면, 이 브라우저에서 편집한 내용이 자동으로 구글 시트에 저장되고
+      페이지를 열 때마다 최신 데이터를 불러옵니다. 같은 URL을 팀원의 브라우저에도 등록하면 서로 최신 데이터를 공유하게 됩니다.
+      비워두면 지금처럼 이 브라우저에만 저장됩니다.
+    </p>
+    <input type="text" id="syncUrlInput" class="sync-url-input" placeholder="https://script.google.com/macros/s/.../exec">
+    <div class="sync-actions">
+      <button class="primary small" id="syncUrlSaveBtn">연결 저장</button>
+      <button class="small" id="syncNowBtn">지금 동기화</button>
+      <button class="danger small" id="syncUrlClearBtn">연결 해제</button>
+    </div>
+    <div id="syncStatusText" style="font-size:12px; color:var(--sub); line-height:1.6;"></div>
+    <div class="modal-footer">
+      <button class="small" id="syncModalClose">닫기</button>
     </div>
   </div>
 </div>
@@ -404,7 +438,7 @@
     }, overrides||{});
   }
   function makeGroup(overrides){
-    return Object.assign({ id: uid(), category:'', title:'', tasks:[] }, overrides||{});
+    return Object.assign({ id: uid(), category:'', title:'', tasks:[], collapsed:false }, overrides||{});
   }
 
   function seedData(){
@@ -424,7 +458,76 @@
     state = { groups: [g1, g2] };
   }
 
-  function save(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.warn('WBS 저장 실패:', e); } }
+  /* ---------------- Google Sheets sync (optional) ---------------- */
+  const SYNC_URL_KEY = 'wbs_sync_url_v1';
+  let syncUrl = '';
+  let syncStatus = 'idle'; // idle | syncing | ok | error
+  let syncStatusMessage = '';
+  let syncTimer = null;
+
+  function loadSyncUrl(){
+    try{ syncUrl = localStorage.getItem(SYNC_URL_KEY) || ''; }catch(e){ syncUrl = ''; }
+  }
+  function persistSyncUrl(url){
+    syncUrl = url;
+    try{ localStorage.setItem(SYNC_URL_KEY, url); }catch(e){ console.warn('동기화 URL 저장 실패:', e); }
+  }
+  function nowKST(){ return new Date().toLocaleTimeString('ko-KR'); }
+
+  async function fetchRemoteState(){
+    const res = await fetch(syncUrl, {method:'GET', cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    if(!data || !Array.isArray(data.groups)) throw new Error('올바른 데이터 형식이 아닙니다');
+    return data;
+  }
+  async function pushRemoteState(){
+    if(!syncUrl) return;
+    syncStatus = 'syncing'; syncStatusMessage = '동기화 중...'; renderSyncStatus();
+    try{
+      const res = await fetch(syncUrl, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify(state)
+      });
+      let result = {};
+      try{ result = await res.json(); }catch(e){}
+      if(!res.ok || result.ok===false) throw new Error(result.error || ('HTTP '+res.status));
+      syncStatus = 'ok';
+      syncStatusMessage = '연결됨 · 마지막 저장 '+nowKST();
+    }catch(e){
+      syncStatus = 'error';
+      syncStatusMessage = '동기화 실패: '+e.message;
+      console.warn('원격 동기화 저장 실패:', e);
+    }
+    renderSyncStatus();
+  }
+  function debouncedRemoteSync(){
+    if(!syncUrl) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(pushRemoteState, 1200);
+  }
+  function renderSyncStatus(){
+    const badge = document.getElementById('syncBadge');
+    if(badge){
+      if(!syncUrl){
+        badge.style.display = 'none';
+      } else {
+        badge.style.display = 'inline-flex';
+        badge.setAttribute('data-state', syncStatus);
+        const label = syncStatus==='syncing' ? '☁ 동기화 중' : syncStatus==='error' ? '⚠ 동기화 오류' : '☁ 동기화됨';
+        badge.textContent = label;
+        badge.title = syncStatusMessage;
+      }
+    }
+    const statusText = document.getElementById('syncStatusText');
+    if(statusText) statusText.textContent = syncUrl ? syncStatusMessage : '등록된 동기화 URL이 없습니다. 이 브라우저에만 저장됩니다.';
+  }
+
+  function save(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.warn('WBS 저장 실패:', e); }
+    debouncedRemoteSync();
+  }
   function load(){
     let raw = null;
     try{ raw = localStorage.getItem(STORAGE_KEY); }catch(e){ console.warn('WBS 불러오기 실패:', e); }
@@ -474,6 +577,7 @@
     return e;
   }
 
+  let dragInfo = null;
   let saveTimer = null;
   function debouncedSave(){
     clearTimeout(saveTimer);
@@ -491,8 +595,38 @@
 
   /* ---------------- Table rendering ---------------- */
   function buildGroupRow(g, gi){
-    const tr = el('tr', {class:'group-row'});
-    tr.appendChild(el('td', {}, [String(gi+1)]));
+    const tr = el('tr', {class:'group-row', draggable:'true'});
+    tr.addEventListener('dragstart', function(e){
+      if(['INPUT','BUTTON','SELECT','TEXTAREA'].indexOf(e.target.tagName)!==-1){ e.preventDefault(); return; }
+      dragInfo = {type:'group', index:gi};
+      try{ e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(gi)); }catch(err){}
+      tr.classList.add('dragging');
+    });
+    tr.addEventListener('dragend', function(){ tr.classList.remove('dragging'); dragInfo = null; });
+    tr.addEventListener('dragover', function(e){
+      if(dragInfo && dragInfo.type==='group') e.preventDefault();
+    });
+    tr.addEventListener('drop', function(e){
+      e.preventDefault();
+      if(!dragInfo || dragInfo.type!=='group') return;
+      const from = dragInfo.index, to = gi;
+      dragInfo = null;
+      if(from===to) return;
+      const moved = state.groups.splice(from,1)[0];
+      state.groups.splice(to,0,moved);
+      fullRender();
+    });
+
+    const noTd = el('td', {});
+    const noWrap = el('div', {style:'display:flex; align-items:center; gap:4px;'});
+    noWrap.appendChild(el('button', {class:'reset-btn collapse-toggle no-print', title: g.collapsed?'펼치기':'접기', onclick:function(){
+      g.collapsed = !g.collapsed;
+      fullRender();
+    }}, [g.collapsed ? '▶' : '▼']));
+    noWrap.appendChild(el('span', {}, [String(gi+1)]));
+    noTd.appendChild(noWrap);
+    tr.appendChild(noTd);
+
     tr.appendChild(el('td', {}, [
       el('input', {type:'text', value:g.category, placeholder:'구분', oninput:function(e){ g.category=e.target.value; debouncedSave(); }})
     ]));
@@ -503,29 +637,11 @@
     tr.appendChild(el('td', {class:'col-md'}, [String(g._md||0)]));
     tr.appendChild(el('td', {}, [g._start ? fmtDisplay(g._start) : '']));
     tr.appendChild(el('td', {}, [g._end ? fmtDisplay(g._end) : '']));
-    tr.appendChild(el('td', {}, ['']));
+    tr.appendChild(el('td', {}, [
+      el('span', {class:'status-pill', 'data-status': g._status||'예정'}, [g._status||'예정'])
+    ]));
     const actions = el('td', {class:'actions-cell no-print'});
     const actionsInner = el('div', {class:'actions-inner'});
-    const upProps = {class:'small', title:'그룹 위로 이동', onclick:function(){
-      if(gi>0){
-        const tmp = state.groups[gi-1];
-        state.groups[gi-1] = state.groups[gi];
-        state.groups[gi] = tmp;
-        fullRender();
-      }
-    }};
-    if(gi===0) upProps.disabled = 'disabled';
-    actionsInner.appendChild(el('button', upProps, ['▲']));
-    const downProps = {class:'small', title:'그룹 아래로 이동', onclick:function(){
-      if(gi<state.groups.length-1){
-        const tmp = state.groups[gi+1];
-        state.groups[gi+1] = state.groups[gi];
-        state.groups[gi] = tmp;
-        fullRender();
-      }
-    }};
-    if(gi===state.groups.length-1) downProps.disabled = 'disabled';
-    actionsInner.appendChild(el('button', downProps, ['▼']));
     actionsInner.appendChild(el('button', {class:'small', title:'하위업무 추가', onclick:function(){
       const prev = g.tasks[g.tasks.length-1];
       const start = prev && prev.end ? nextBusinessDay(prev.end) : toISO(new Date());
@@ -544,7 +660,29 @@
   }
 
   function buildTaskRow(g, t, gi, ti){
-    const tr = el('tr', {class:'task-row'});
+    const tr = el('tr', {class:'task-row', draggable:'true'});
+    tr.addEventListener('dragstart', function(e){
+      if(['INPUT','BUTTON','SELECT','TEXTAREA'].indexOf(e.target.tagName)!==-1){ e.preventDefault(); return; }
+      dragInfo = {type:'task', groupIndex:gi, taskIndex:ti};
+      try{ e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(ti)); }catch(err){}
+      e.stopPropagation();
+      tr.classList.add('dragging');
+    });
+    tr.addEventListener('dragend', function(){ tr.classList.remove('dragging'); dragInfo = null; });
+    tr.addEventListener('dragover', function(e){
+      if(dragInfo && dragInfo.type==='task' && dragInfo.groupIndex===gi){ e.preventDefault(); e.stopPropagation(); }
+    });
+    tr.addEventListener('drop', function(e){
+      if(!dragInfo || dragInfo.type!=='task' || dragInfo.groupIndex!==gi) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const from = dragInfo.taskIndex, to = ti;
+      dragInfo = null;
+      if(from===to) return;
+      const moved = g.tasks.splice(from,1)[0];
+      g.tasks.splice(to,0,moved);
+      fullRender();
+    });
     tr.appendChild(el('td', {}, [gi+1+'.'+(ti+1)]));
     tr.appendChild(el('td', {}, [
       el('input', {type:'text', value:t.category, placeholder:'구분', oninput:function(e){ t.category=e.target.value; debouncedSave(); }})
@@ -620,6 +758,7 @@
     }
     state.groups.forEach(function(g, gi){
       tbody.appendChild(buildGroupRow(g, gi));
+      if(g.collapsed) return;
       g.tasks.forEach(function(t, ti){
         tbody.appendChild(buildTaskRow(g, t, gi, ti));
       });
@@ -758,6 +897,7 @@
       gtr.appendChild(groupTitleTd);
       tbody.appendChild(gtr);
 
+      if(g.collapsed) return;
       g.tasks.forEach(function(t, ti){
         const ttr = el('tr', {class:'gantt-row-task'});
         ganttLabelCells((gi+1)+'.'+(ti+1), t.category, t.detail).forEach(function(td){ ttr.appendChild(td); });
@@ -1153,6 +1293,7 @@
   });
   document.getElementById('btnSaveNow').addEventListener('click', function(){
     fullRender();
+    if(syncUrl){ clearTimeout(syncTimer); pushRemoteState(); }
   });
   document.getElementById('btnHolidays').addEventListener('click', function(){
     renderHolidayList();
@@ -1199,6 +1340,57 @@
       fullRender();
     }
   });
+  document.getElementById('btnSyncSettings').addEventListener('click', function(){
+    document.getElementById('syncUrlInput').value = syncUrl;
+    renderSyncStatus();
+    document.getElementById('syncModal').classList.remove('hidden');
+  });
+  document.getElementById('syncModalClose').addEventListener('click', function(){
+    document.getElementById('syncModal').classList.add('hidden');
+  });
+  document.getElementById('syncModal').addEventListener('click', function(e){
+    if(e.target.id==='syncModal') e.currentTarget.classList.add('hidden');
+  });
+  document.getElementById('syncUrlSaveBtn').addEventListener('click', async function(){
+    const val = document.getElementById('syncUrlInput').value.trim();
+    persistSyncUrl(val);
+    if(!val){
+      syncStatus = 'idle'; syncStatusMessage = '';
+      renderSyncStatus();
+      return;
+    }
+    syncStatus = 'syncing'; syncStatusMessage = '연결 확인 중...'; renderSyncStatus();
+    try{
+      const remote = await fetchRemoteState();
+      if(remote.groups.length > 0){
+        if(confirm('연결된 시트에 이미 데이터가 있습니다. 그 데이터를 불러와서 화면에 표시할까요?\n(취소하면 지금 화면 데이터를 유지합니다)')){
+          state = remote;
+          fullRender();
+        }
+      } else if(confirm('연결된 시트가 비어 있습니다. 지금 화면에 보이는 데이터를 시트에 저장할까요?')){
+        await pushRemoteState();
+      }
+      syncStatus = 'ok';
+      syncStatusMessage = '연결됨 · '+nowKST();
+    }catch(e){
+      syncStatus = 'error';
+      syncStatusMessage = '연결 실패: '+e.message;
+    }
+    renderSyncStatus();
+  });
+  document.getElementById('syncNowBtn').addEventListener('click', function(){
+    if(!syncUrl){ alert('먼저 동기화 URL을 등록하고 저장해주세요.'); return; }
+    clearTimeout(syncTimer);
+    pushRemoteState();
+  });
+  document.getElementById('syncUrlClearBtn').addEventListener('click', function(){
+    if(confirm('구글 시트 연결을 해제할까요? 이후로는 이 브라우저에만 저장됩니다.')){
+      persistSyncUrl('');
+      document.getElementById('syncUrlInput').value = '';
+      syncStatus = 'idle'; syncStatusMessage = '';
+      renderSyncStatus();
+    }
+  });
   document.getElementById('btnExportCsv').addEventListener('click', exportCsv);
   document.getElementById('btnExportXlsx').addEventListener('click', exportXlsx);
   document.getElementById('btnExportJson').addEventListener('click', exportJson);
@@ -1232,9 +1424,29 @@
   });
 
   /* ---------------- Init ---------------- */
+  async function initState(){
+    loadSyncUrl();
+    if(syncUrl){
+      syncStatus = 'syncing'; syncStatusMessage = '동기화 서버에서 불러오는 중...'; renderSyncStatus();
+      try{
+        const remote = await fetchRemoteState();
+        state = remote;
+        syncStatus = 'ok';
+        syncStatusMessage = '연결됨 · 마지막 불러오기 '+nowKST();
+        return;
+      }catch(e){
+        syncStatus = 'error';
+        syncStatusMessage = '동기화 서버에 연결하지 못해 이 브라우저의 로컬 데이터를 표시 중입니다 ('+e.message+')';
+        console.warn('원격 데이터 불러오기 실패:', e);
+      }
+    }
+    load();
+  }
   loadHolidayStorage();
-  load();
-  fullRender();
+  initState().then(function(){
+    fullRender();
+    renderSyncStatus();
+  });
 })();
 </script>
 </body>

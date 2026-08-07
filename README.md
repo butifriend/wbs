@@ -65,3 +65,4 @@ JSON 내보내기/가져오기나 git 없이, wbs.html을 열면 항상 최신 �
 
 ### 보안 참고
 Apps Script 웹 앱을 "전체 허용"으로 배포하면, 그 URL을 아는 사람은 누구나(로그인 없이) 데이터를 읽고 쓸 수 있습니다. URL 자체가 비밀번호 역할을 하므로 신뢰할 수 있는 팀원에게만 공유하세요.
+(https://script.google.com/macros/s/AKfycbw811wSvaZt90LeelB-3yzp88ubZWsEKoGFvpHDzsBc4I4ivJoAD3LdmIAPUMStpCzr9A/exec)

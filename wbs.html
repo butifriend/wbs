@@ -79,18 +79,17 @@
   .chip.hold{color:var(--st-hold); background:var(--st-hold-bg);}
   .chip.plan{color:var(--st-plan); background:var(--st-plan-bg);}
 
-  table{width:100%; min-width:1294px; border-collapse:collapse; table-layout:fixed;}
+  table{width:100%; min-width:1370px; border-collapse:collapse; table-layout:fixed;}
   col.c-no{width:56px;} col.c-cat{width:90px;} col.c-detail{width:auto;}
-  col.c-assignee{width:156px;} col.c-md{width:70px;} col.c-date{width:178px;} col.c-date-end{width:200px;}
+  col.c-assignee{width:156px;} col.c-md{width:70px;} col.c-date{width:198px;} col.c-date-end{width:256px;}
   col.c-status{width:96px;} col.c-actions{width:120px;}
   thead th{
-    background:var(--bg); color:var(--sub); font-size:12px; font-weight:700; text-align:left;
+    background:var(--bg); color:var(--sub); font-size:12px; font-weight:700; text-align:center;
     padding:9px 8px; border-bottom:2px solid var(--border); position:sticky; top:0;
   }
-  thead th.col-no, thead th.col-md{text-align:center;}
   tbody td{padding:5px 8px; border-bottom:1px solid var(--border); vertical-align:middle;}
-  tbody td.col-no, tbody td.col-md{text-align:center;}
-  input[type=number]{text-align:center; padding-left:2px; padding-right:0;}
+  tbody td.col-no, tbody td.col-md{text-align:right;}
+  input[type=number]{text-align:right; padding-left:2px; padding-right:4px;}
   tr.group-row td{background:var(--group-bg); color:var(--group-text); font-weight:700; padding:5px 8px;}
   tr.group-row input{background:transparent; color:var(--group-text); font-weight:700;}
   tr.group-row input::placeholder{color:var(--group-text-muted);}
@@ -111,6 +110,10 @@
   }
   .cell-inner{display:flex; align-items:center; gap:4px; overflow:hidden; width:100%;}
   .cell-inner input{flex:1 1 auto; min-width:0;}
+  .cell-inner input[type=date]{flex:0 0 auto; width:auto;}
+  input[type=date]::-webkit-calendar-picker-indicator{display:none; -webkit-appearance:none;}
+  .date-pick-btn{border:none; background:none; cursor:pointer; color:var(--sub); padding:2px; display:inline-flex; flex:0 0 auto; line-height:1;}
+  .date-pick-btn:hover{color:var(--accent);}
   .badge-auto{font-size:10px; padding:2px 5px; border-radius:5px; background:var(--st-done-bg); color:var(--st-done); white-space:nowrap; flex:0 0 auto;}
   .badge-manual{font-size:10px; padding:2px 5px; border-radius:5px; background:var(--st-hold-bg); color:var(--st-hold); white-space:nowrap; flex:0 0 auto;}
   .reset-btn{border:none; background:none; cursor:pointer; color:var(--sub); font-size:13px; padding:2px 4px; flex:0 0 auto;}
@@ -327,6 +330,12 @@
   }
   const DOW = ['일','월','화','수','목','금','토'];
   function dowKR(d){ return DOW[d.getDay()]; }
+  const CALENDAR_ICON_HTML = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="3" width="13" height="11" rx="1.5"/><line x1="1.5" y1="6.5" x2="14.5" y2="6.5"/><line x1="4.5" y1="1.5" x2="4.5" y2="4"/><line x1="11.5" y1="1.5" x2="11.5" y2="4"/></svg>';
+  function makeDatePickBtn(dateInput){
+    return el('button', {type:'button', class:'date-pick-btn no-print', title:'달력 열기', html: CALENDAR_ICON_HTML, onclick:function(){
+      try{ if(dateInput.showPicker) dateInput.showPicker(); else dateInput.focus(); }catch(err){ dateInput.focus(); }
+    }});
+  }
   function fmtDisplay(s){
     const d = parseISO(s);
     if(!d) return '';
@@ -656,7 +665,7 @@
     });
 
     const noTd = el('td', {class:'col-no'});
-    const noWrap = el('div', {style:'display:flex; align-items:center; justify-content:center; gap:4px;'});
+    const noWrap = el('div', {style:'display:flex; align-items:center; justify-content:flex-end; gap:4px;'});
     noWrap.appendChild(el('button', {class:'reset-btn collapse-toggle no-print', title: g.collapsed?'펼치기':'접기', onclick:function(){
       g.collapsed = !g.collapsed;
       fullRender();
@@ -741,21 +750,25 @@
     ]));
     const startTd = el('td', {class:'start-cell'});
     const startInner = el('div', {class:'cell-inner'});
-    startInner.appendChild(el('input', {type:'date', value:t.start||'', onchange:function(e){
+    const startInput = el('input', {type:'date', value:t.start||'', onchange:function(e){
       t.start = e.target.value; fullRender();
-    }}));
+    }});
+    startInner.appendChild(startInput);
     const startDow = parseISO(t.start);
     if(startDow) startInner.appendChild(el('span', {class:'dow'}, ['('+dowKR(startDow)+')']));
+    startInner.appendChild(makeDatePickBtn(startInput));
     startTd.appendChild(startInner);
     tr.appendChild(startTd);
 
     const endTd = el('td', {class:'end-cell'});
     const endInner = el('div', {class:'cell-inner'});
-    endInner.appendChild(el('input', {type:'date', value:t.end||'', onchange:function(e){
+    const endInput = el('input', {type:'date', value:t.end||'', onchange:function(e){
       t.end = e.target.value; t.endManual = true; fullRender();
-    }}));
+    }});
+    endInner.appendChild(endInput);
     const endDow = parseISO(t.end);
     if(endDow) endInner.appendChild(el('span', {class:'dow'}, ['('+dowKR(endDow)+')']));
+    endInner.appendChild(makeDatePickBtn(endInput));
     if(t.endManual){
       endInner.appendChild(el('span', {class:'badge-manual', title:'수동으로 지정된 종료일입니다'}, ['수동']));
       endInner.appendChild(el('button', {class:'reset-btn', title:'자동 계산으로 되돌리기', onclick:function(){

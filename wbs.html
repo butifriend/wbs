@@ -68,6 +68,8 @@
     padding:7px 8px; border-radius:6px;
   }
   .menu-panel button:hover{background:var(--bg); color:var(--accent);}
+  .menu-panel button.danger{color:var(--danger);}
+  .menu-panel button.danger:hover{background:var(--danger-bg); color:var(--danger);}
 
   .summary{display:flex; flex-wrap:wrap; gap:10px 24px; font-size:13px;}
   .summary .item b{display:block; font-size:16px; margin-top:2px;}
@@ -85,9 +87,9 @@
     background:var(--bg); color:var(--sub); font-size:12px; font-weight:700; text-align:left;
     padding:9px 8px; border-bottom:2px solid var(--border); position:sticky; top:0;
   }
-  thead th.col-md{text-align:center;}
+  thead th.col-no, thead th.col-md{text-align:center;}
   tbody td{padding:5px 8px; border-bottom:1px solid var(--border); vertical-align:middle;}
-  tbody td.col-md{text-align:center;}
+  tbody td.col-no, tbody td.col-md{text-align:center;}
   input[type=number]{text-align:center; padding-left:2px; padding-right:0;}
   tr.group-row td{background:var(--group-bg); color:var(--group-text); font-weight:700; padding:5px 8px;}
   tr.group-row input{background:transparent; color:var(--group-text); font-weight:700;}
@@ -122,7 +124,7 @@
   .sync-actions{display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
   .weekend-warn{color:var(--danger);}
 
-  select[data-field=status]{font-weight:600;}
+  select[data-field=status]{font-weight:700; font-size:12px;}
   select[data-status=완료]{color:var(--st-done);}
   select[data-status=진행]{color:var(--st-progress);}
   select[data-status=보류]{color:var(--st-hold);}
@@ -201,10 +203,10 @@
 
   <div class="panel no-print">
     <div class="toolbar">
+      <div class="spacer"></div>
       <button class="primary" id="btnAddGroup">+ 그룹 추가</button>
       <button class="primary" id="btnSaveNow" title="구분/상세업무 등 텍스트 입력은 즉시 간트차트에 반영되지 않습니다. 입력 후 이 버튼을 눌러 반영하세요.">저장</button>
       <span id="syncBadge" class="sync-badge" style="display:none;"></span>
-      <div class="spacer"></div>
       <div class="menu-wrap" id="menuWrap">
         <button id="btnMenuToggle" class="menu-toggle">기능모음 ▾</button>
         <div class="menu-panel hidden" id="menuPanel">
@@ -225,10 +227,13 @@
             <div class="menu-label">인쇄</div>
             <button id="btnPrint">인쇄</button>
           </div>
+          <div class="menu-group">
+            <div class="menu-label">위험</div>
+            <button class="danger" id="btnClearAll">전체 초기화</button>
+          </div>
         </div>
       </div>
       <input type="file" id="fileImport" accept="application/json" style="display:none">
-      <button class="danger" id="btnClearAll">전체 초기화</button>
     </div>
     <div class="summary" id="summaryBar"></div>
   </div>
@@ -241,7 +246,7 @@
       </colgroup>
       <thead>
         <tr>
-          <th>순번</th><th>구분</th><th>상세업무</th><th>담당자</th><th class="col-md">M/D</th>
+          <th class="col-no">순번</th><th>구분</th><th>상세업무</th><th>담당자</th><th class="col-md">M/D</th>
           <th>시작일</th><th>종료일</th><th>상태</th><th class="no-print">관리</th>
         </tr>
       </thead>
@@ -650,8 +655,8 @@
       fullRender();
     });
 
-    const noTd = el('td', {});
-    const noWrap = el('div', {style:'display:flex; align-items:center; gap:4px;'});
+    const noTd = el('td', {class:'col-no'});
+    const noWrap = el('div', {style:'display:flex; align-items:center; justify-content:center; gap:4px;'});
     noWrap.appendChild(el('button', {class:'reset-btn collapse-toggle no-print', title: g.collapsed?'펼치기':'접기', onclick:function(){
       g.collapsed = !g.collapsed;
       fullRender();
@@ -661,10 +666,10 @@
     tr.appendChild(noTd);
 
     tr.appendChild(el('td', {}, [
-      el('input', {type:'text', value:g.category, placeholder:'구분', oninput:function(e){ g.category=e.target.value; debouncedSave(); }})
+      el('input', {type:'text', draggable:'false', value:g.category, placeholder:'구분', oninput:function(e){ g.category=e.target.value; debouncedSave(); }})
     ]));
     tr.appendChild(el('td', {}, [
-      el('input', {type:'text', value:g.title, placeholder:'상세업무(그룹명)', oninput:function(e){ g.title=e.target.value; debouncedSave(); }})
+      el('input', {type:'text', draggable:'false', value:g.title, placeholder:'상세업무(그룹명)', oninput:function(e){ g.title=e.target.value; debouncedSave(); }})
     ]));
     tr.appendChild(el('td', {}, ['']));
     tr.appendChild(el('td', {class:'col-md'}, [String(g._md||0)]));
@@ -716,15 +721,15 @@
       g.tasks.splice(to,0,moved);
       fullRender();
     });
-    tr.appendChild(el('td', {}, [gi+1+'.'+(ti+1)]));
+    tr.appendChild(el('td', {class:'col-no'}, [gi+1+'.'+(ti+1)]));
     tr.appendChild(el('td', {}, [
-      el('input', {type:'text', value:t.category, placeholder:'구분', oninput:function(e){ t.category=e.target.value; debouncedSave(); }})
+      el('input', {type:'text', draggable:'false', value:t.category, placeholder:'구분', oninput:function(e){ t.category=e.target.value; debouncedSave(); }})
     ]));
     tr.appendChild(el('td', {}, [
-      el('input', {type:'text', value:t.detail, placeholder:'상세업무', oninput:function(e){ t.detail=e.target.value; debouncedSave(); }})
+      el('input', {type:'text', draggable:'false', value:t.detail, placeholder:'상세업무', oninput:function(e){ t.detail=e.target.value; debouncedSave(); }})
     ]));
     tr.appendChild(el('td', {}, [
-      el('input', {type:'text', value:t.assignee, placeholder:'담당자', oninput:function(e){ t.assignee=e.target.value; debouncedSave(); }})
+      el('input', {type:'text', draggable:'false', value:t.assignee, placeholder:'담당자', oninput:function(e){ t.assignee=e.target.value; debouncedSave(); }})
     ]));
     tr.appendChild(el('td', {}, [
       el('input', {type:'number', min:'0', step:'1', value:String(t.md), onchange:function(e){
@@ -1374,6 +1379,19 @@
       }
     });
   })();
+
+  // A draggable <tr> (used for row reordering) blocks native text-selection drags on
+  // its input children in Chromium regardless of the input's own draggable attribute —
+  // so disable the row's draggable while the user is dragging inside a text field.
+  document.getElementById('wbsBody').addEventListener('mousedown', function(e){
+    if(['INPUT','TEXTAREA'].indexOf(e.target.tagName)!==-1){
+      const tr = e.target.closest('tr');
+      if(tr) tr.draggable = false;
+    }
+  });
+  document.addEventListener('mouseup', function(){
+    document.querySelectorAll('#wbsBody tr[draggable]').forEach(function(tr){ tr.draggable = true; });
+  });
 
   document.getElementById('btnAddGroup').addEventListener('click', function(){
     const g = makeGroup();

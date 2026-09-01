@@ -194,6 +194,7 @@
       <input type="file" id="fileImport" accept="application/json" style="display:none">
       <button id="btnExportCsv">CSV 내보내기</button>
       <button class="primary" id="btnExportXlsx">엑셀 다운로드 (.xlsx)</button>
+      <button id="btnExportHtml">HTML 다운로드</button>
       <button id="btnPrint">인쇄</button>
       <button class="danger" id="btnClearAll">전체 초기화</button>
     </div>
@@ -976,6 +977,46 @@
   function exportJson(){
     download('wbs_' + toISO(new Date()) + '.json', JSON.stringify(state, null, 2), 'application/json;charset=utf-8;');
   }
+  function escapeHtml(v){
+    return String(v==null?'':v).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function statusPillHtml(status){
+    return '<span class="status-pill" data-status="'+escapeHtml(status||'예정')+'">'+escapeHtml(status||'예정')+'</span>';
+  }
+  function exportHtml(){
+    const rowsHtml = [];
+    state.groups.forEach(function(g, gi){
+      rowsHtml.push(
+        '<tr class="group-row"><td>'+(gi+1)+'</td><td>'+escapeHtml(g.category)+'</td><td>'+escapeHtml(g.title)+
+        '</td><td></td><td>'+(g._md||0)+'</td><td></td><td></td><td>'+statusPillHtml(g._status)+'</td></tr>'
+      );
+      g.tasks.forEach(function(t, ti){
+        rowsHtml.push(
+          '<tr><td>'+(gi+1)+'.'+(ti+1)+'</td><td>'+escapeHtml(t.category)+'</td><td>'+escapeHtml(t.detail)+
+          '</td><td>'+escapeHtml(t.assignee)+'</td><td>'+(Number(t.md)||0)+'</td><td>'+escapeHtml(fmtDisplay(t.start))+
+          '</td><td>'+escapeHtml(fmtDisplay(t.end))+'</td><td>'+statusPillHtml(t.status)+'</td></tr>'
+        );
+      });
+    });
+    const html = '<!doctype html>\n<html lang="ko"><head><meta charset="utf-8">'+
+      '<title>WBS 일정 관리 (' + toISO(new Date()) + ')</title><style>'+
+      'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic",sans-serif; margin:24px; color:#1f2328; background:#fff;}'+
+      'h1{font-size:20px; margin:0 0 4px;} .meta{color:#6b7280; font-size:12px; margin-bottom:16px;}'+
+      'table{border-collapse:collapse; width:100%;} th,td{border:1px solid #d0d5dd; padding:6px 8px; font-size:13px; text-align:left;}'+
+      'th{background:#f2f4f7;} tr.group-row{background:#f9fafb; font-weight:600;}'+
+      '.status-pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px;}'+
+      '.status-pill[data-status="완료"]{color:#3b6fd6; background:#e8eefc;}'+
+      '.status-pill[data-status="진행"]{color:#70ad47; background:#e2f0d9;}'+
+      '.status-pill[data-status="보류"]{color:#d1453b; background:#fbe7e6;}'+
+      '.status-pill[data-status="예정"]{color:#6b7280; background:#eef0f2;}'+
+      '</style></head><body>'+
+      '<h1>WBS 일정 관리</h1><div class="meta">내보낸 날짜: '+toISO(new Date())+'</div>'+
+      '<table><thead><tr><th>순번</th><th>구분</th><th>상세업무</th><th>담당자</th><th>M/D</th><th>시작일</th><th>종료일</th><th>상태</th></tr></thead>'+
+      '<tbody>'+rowsHtml.join('')+'</tbody></table></body></html>';
+    download('wbs_' + toISO(new Date()) + '.html', html, 'text/html;charset=utf-8;');
+  }
 
   /* ---------------- XLSX (real Excel file, built without any library) ---------------- */
   // Minimal ZIP (store/no-compression) writer — enough for a valid .xlsx package.
@@ -1394,6 +1435,7 @@
   document.getElementById('btnExportCsv').addEventListener('click', exportCsv);
   document.getElementById('btnExportXlsx').addEventListener('click', exportXlsx);
   document.getElementById('btnExportJson').addEventListener('click', exportJson);
+  document.getElementById('btnExportHtml').addEventListener('click', exportHtml);
   document.getElementById('btnImportJsonTrigger').addEventListener('click', function(){
     document.getElementById('fileImport').click();
   });

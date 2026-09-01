@@ -72,7 +72,8 @@
   .menu-panel button.danger:hover{background:var(--danger-bg); color:var(--danger);}
 
   .summary{display:flex; flex-wrap:wrap; gap:10px 24px; font-size:13px;}
-  .summary .item b{display:block; font-size:16px; margin-top:2px;}
+  .summary .item{display:flex; align-items:center; gap:4px;}
+  .summary .item b{font-size:16px;}
   .chip{display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:600;}
   .chip.done{color:var(--st-done); background:var(--st-done-bg);}
   .chip.progress{color:var(--st-progress); background:var(--st-progress-bg);}
@@ -832,15 +833,14 @@
     allTasks.forEach(function(t){ counts[t.status] = (counts[t.status]||0)+1; });
 
     function item(label, value){
-      return el('div', {class:'item'}, [label, el('b', {}, [value])]);
+      return el('div', {class:'item'}, [label+' : ', el('b', {}, [value])]);
     }
     bar.appendChild(item('그룹 수', String(state.groups.length)));
     bar.appendChild(item('전체 업무 수', String(allTasks.length)));
     bar.appendChild(item('총 M/D', String(totalMd)));
     bar.appendChild(item('전체 기간', starts.length ? (fmtDisplay(starts[0])+' ~ '+fmtDisplay(ends[ends.length-1])) : '-'));
-    const statusWrap = el('div', {class:'item'}, ['상태']);
+    const statusWrap = el('div', {class:'item'}, ['상태 : ']);
     const chipRow = el('div', {}, []);
-    chipRow.style.marginTop = '4px';
     chipRow.appendChild(el('span', {class:'chip done'}, ['완료 '+counts.완료]));
     chipRow.appendChild(document.createTextNode(' '));
     chipRow.appendChild(el('span', {class:'chip progress'}, ['진행 '+counts.진행]));

@@ -53,6 +53,22 @@
   button:disabled{opacity:.35; cursor:not-allowed; pointer-events:none;}
   .spacer{flex:1;}
 
+  .menu-wrap{position:relative;}
+  .menu-toggle{white-space:nowrap;}
+  .menu-panel{
+    position:absolute; top:calc(100% + 6px); right:0; min-width:190px; z-index:40;
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    box-shadow:var(--shadow); padding:6px; display:flex; flex-direction:column; gap:2px;
+  }
+  .menu-panel.hidden{display:none;}
+  .menu-group + .menu-group{border-top:1px solid var(--border); margin-top:4px; padding-top:4px;}
+  .menu-label{font-size:11px; font-weight:700; color:var(--sub); padding:6px 8px 2px; letter-spacing:.02em;}
+  .menu-panel button{
+    width:100%; text-align:left; border:none; background:transparent; color:var(--text);
+    padding:7px 8px; border-radius:6px;
+  }
+  .menu-panel button:hover{background:var(--bg); color:var(--accent);}
+
   .summary{display:flex; flex-wrap:wrap; gap:10px 24px; font-size:13px;}
   .summary .item b{display:block; font-size:16px; margin-top:2px;}
   .chip{display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:600;}
@@ -186,18 +202,32 @@
   <div class="panel no-print">
     <div class="toolbar">
       <button class="primary" id="btnAddGroup">+ 그룹 추가</button>
-      <button id="btnHolidays">공휴일 관리</button>
-      <button id="btnSyncSettings">동기화 설정</button>
       <button class="primary" id="btnSaveNow" title="구분/상세업무 등 텍스트 입력은 즉시 간트차트에 반영되지 않습니다. 입력 후 이 버튼을 눌러 반영하세요.">저장</button>
       <span id="syncBadge" class="sync-badge" style="display:none;"></span>
       <div class="spacer"></div>
-      <button id="btnExportJson">JSON 내보내기</button>
-      <button id="btnImportJsonTrigger">JSON 가져오기</button>
+      <div class="menu-wrap" id="menuWrap">
+        <button id="btnMenuToggle" class="menu-toggle">기능모음 ▾</button>
+        <div class="menu-panel hidden" id="menuPanel">
+          <div class="menu-group">
+            <div class="menu-label">설정</div>
+            <button id="btnHolidays">공휴일 관리</button>
+            <button id="btnSyncSettings">동기화 설정</button>
+          </div>
+          <div class="menu-group">
+            <div class="menu-label">내보내기 · 가져오기</div>
+            <button id="btnExportJson">JSON 내보내기</button>
+            <button id="btnImportJsonTrigger">JSON 가져오기</button>
+            <button id="btnExportCsv">CSV 내보내기</button>
+            <button id="btnExportXlsx">엑셀 다운로드 (.xlsx)</button>
+            <button id="btnExportHtml">HTML 다운로드</button>
+          </div>
+          <div class="menu-group">
+            <div class="menu-label">인쇄</div>
+            <button id="btnPrint">인쇄</button>
+          </div>
+        </div>
+      </div>
       <input type="file" id="fileImport" accept="application/json" style="display:none">
-      <button id="btnExportCsv">CSV 내보내기</button>
-      <button class="primary" id="btnExportXlsx">엑셀 다운로드 (.xlsx)</button>
-      <button id="btnExportHtml">HTML 다운로드</button>
-      <button id="btnPrint">인쇄</button>
       <button class="danger" id="btnClearAll">전체 초기화</button>
     </div>
     <div class="summary" id="summaryBar"></div>
@@ -1328,6 +1358,23 @@
   }
 
   /* ---------------- Wire up ---------------- */
+  (function(){
+    const menuToggle = document.getElementById('btnMenuToggle');
+    const menuPanel = document.getElementById('menuPanel');
+    menuToggle.addEventListener('click', function(e){
+      e.stopPropagation();
+      menuPanel.classList.toggle('hidden');
+    });
+    menuPanel.addEventListener('click', function(e){
+      if(e.target.tagName === 'BUTTON') menuPanel.classList.add('hidden');
+    });
+    document.addEventListener('click', function(e){
+      if(!menuPanel.classList.contains('hidden') && !menuPanel.contains(e.target) && e.target !== menuToggle){
+        menuPanel.classList.add('hidden');
+      }
+    });
+  })();
+
   document.getElementById('btnAddGroup').addEventListener('click', function(){
     const g = makeGroup();
     g.tasks.push(makeTask());

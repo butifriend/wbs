@@ -79,14 +79,15 @@
   .chip.hold{color:var(--st-hold); background:var(--st-hold-bg);}
   .chip.plan{color:var(--st-plan); background:var(--st-plan-bg);}
 
-  table{width:100%; min-width:1370px; border-collapse:collapse; table-layout:fixed;}
+  table{width:100%; min-width:1340px; border-collapse:collapse; table-layout:fixed;}
   col.c-no{width:56px;} col.c-cat{width:90px;} col.c-detail{width:auto;}
-  col.c-assignee{width:156px;} col.c-md{width:70px;} col.c-date{width:198px;} col.c-date-end{width:256px;}
+  col.c-assignee{width:156px;} col.c-md{width:70px;} col.c-date{width:184px;} col.c-date-end{width:240px;}
   col.c-status{width:96px;} col.c-actions{width:120px;}
   thead th{
-    background:var(--bg); color:var(--sub); font-size:12px; font-weight:700; text-align:center;
+    background:var(--bg); color:var(--sub); font-size:12px; font-weight:700; text-align:left;
     padding:9px 8px; border-bottom:2px solid var(--border); position:sticky; top:0;
   }
+  thead th.col-no, thead th.col-md{text-align:right;}
   tbody td{padding:5px 8px; border-bottom:1px solid var(--border); vertical-align:middle;}
   tbody td.col-no, tbody td.col-md{text-align:right;}
   input[type=number]{text-align:right; padding-left:2px; padding-right:4px;}
@@ -110,7 +111,7 @@
   }
   .cell-inner{display:flex; align-items:center; gap:4px; overflow:hidden; width:100%;}
   .cell-inner input{flex:1 1 auto; min-width:0;}
-  .cell-inner input[type=date]{flex:0 0 auto; width:auto;}
+  .cell-inner input[type=date]{flex:0 0 auto; width:auto; padding:5px 2px;}
   input[type=date]::-webkit-calendar-picker-indicator{display:none; -webkit-appearance:none;}
   .date-pick-btn{border:none; background:none; cursor:pointer; color:var(--sub); padding:2px; display:inline-flex; flex:0 0 auto; line-height:1;}
   .date-pick-btn:hover{color:var(--accent);}

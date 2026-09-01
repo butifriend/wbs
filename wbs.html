@@ -6,25 +6,27 @@
 <title>WBS 일정 관리</title>
 <style>
   :root{
-    --bg:#f4f6f9; --panel:#ffffff; --border:#dde3ea; --text:#1f2937; --sub:#6b7280;
-    --accent:#2f6fed; --accent-dark:#1f4fb8; --group-bg:#2f6fed; --group-text:#ffffff;
-    --danger:#e5484d; --danger-bg:#fdeaea;
-    --st-done:#3b6fd6; --st-done-bg:#e8eefc;
-    --st-progress:#70ad47; --st-progress-bg:#e2f0d9;
-    --st-hold:#d1453b; --st-hold-bg:#fbe7e6;
-    --st-plan:#6b7280; --st-plan-bg:#eef0f2;
-    --shadow: 0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.06);
+    --bg:#f6f7f9; --panel:#ffffff; --border:#e4e7ec; --text:#2b3140; --sub:#6b7280;
+    --accent:#4c6fa3; --accent-dark:#3a5a8c; --group-bg:#eaf0f8; --group-text:#2e4a72;
+    --group-text-muted: rgba(46,74,114,.55); --hover-tint: rgba(76,111,163,.06);
+    --danger:#c1454b; --danger-bg:#fbe9ea;
+    --st-done:#3e5e85; --st-done-bg:#e6edf6;
+    --st-progress:#4c7a50; --st-progress-bg:#e7f0e7;
+    --st-hold:#c1454b; --st-hold-bg:#fbe9ea;
+    --st-plan:#6b7280; --st-plan-bg:#eef0f3;
+    --shadow: 0 1px 3px rgba(43,49,64,.06), 0 1px 2px rgba(43,49,64,.05);
   }
   @media (prefers-color-scheme: dark){
     :root{
-      --bg:#14161a; --panel:#1c1f26; --border:#2b2f38; --text:#e6e9ee; --sub:#98a2b3;
-      --accent:#5b8def; --accent-dark:#4874c9; --group-bg:#2a4a8f; --group-text:#eaf0ff;
-      --danger:#f0605f; --danger-bg:#3a2222;
-      --st-done:#6f9bef; --st-done-bg:#1c2b4a;
-      --st-progress:#e0ad4b; --st-progress-bg:#3a2f16;
-      --st-hold:#e5716c; --st-hold-bg:#3a2020;
-      --st-plan:#98a2b3; --st-plan-bg:#262a31;
-      --shadow: 0 1px 3px rgba(0,0,0,.4);
+      --bg:#181a1f; --panel:#1f232a; --border:#2c313a; --text:#d8dce3; --sub:#8b95a3;
+      --accent:#7891b8; --accent-dark:#8fa4c4; --group-bg:#232c3a; --group-text:#c3d2e8;
+      --group-text-muted: rgba(195,210,232,.55); --hover-tint: rgba(120,145,184,.09);
+      --danger:#cf8b8d; --danger-bg:#332325;
+      --st-done:#7d97b8; --st-done-bg:#232b38;
+      --st-progress:#8fae8f; --st-progress-bg:#232b24;
+      --st-hold:#cf8b8d; --st-hold-bg:#332325;
+      --st-plan:#98a2b3; --st-plan-bg:#22252b;
+      --shadow: 0 1px 3px rgba(0,0,0,.35);
     }
   }
   *{box-sizing:border-box;}
@@ -73,14 +75,14 @@
   input[type=number]{text-align:center; padding-left:2px; padding-right:0;}
   tr.group-row td{background:var(--group-bg); color:var(--group-text); font-weight:700; padding:5px 8px;}
   tr.group-row input{background:transparent; color:var(--group-text); font-weight:700;}
-  tr.group-row input::placeholder{color:rgba(255,255,255,.7);}
+  tr.group-row input::placeholder{color:var(--group-text-muted);}
   tr.group-row input:focus{color:var(--text);}
   tr.group-row, tr.task-row{cursor:grab;}
   tr.group-row input, tr.task-row input, tr.group-row select, tr.task-row select, tr.group-row button, tr.task-row button{cursor:auto;}
   tr.dragging{opacity:.35;}
   .collapse-toggle{color:inherit; font-size:11px; padding:2px;}
-  tr.group-row .collapse-toggle:hover{color:rgba(255,255,255,.7);}
-  tr.task-row:hover td{background:rgba(47,111,237,.05);}
+  tr.group-row .collapse-toggle:hover{color:var(--group-text-muted);}
+  tr.task-row:hover td{background:var(--hover-tint);}
   input[type=text], input[type=number], input[type=date], select{
     width:100%; padding:5px 6px; border:1px solid transparent; border-radius:6px;
     background:transparent; color:inherit; font:inherit;
@@ -139,14 +141,14 @@
   .gantt-row-group td.sticky-c1, .gantt-row-group td.sticky-c2{background:var(--group-bg); color:var(--group-text);}
   .gantt-row-group td.gantt-group-title{background:var(--group-bg); color:var(--group-text); text-align:left; padding-left:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .gantt-week-th.current-week{color:var(--danger);}
-  td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#e6e6e6;}
-  td.gantt-cell[data-category="기획"]{background:#fff2cc;}
-  td.gantt-cell[data-category="작성"]{background:#fff2cc;}
-  td.gantt-cell[data-category="수정"]{background:#fbe5d6;}
-  td.gantt-cell[data-category="검토"]{background:#e2f0d9;}
-  td.gantt-cell[data-category="테스트"]{background:#ededed;}
-  td.gantt-cell[data-category="보고"]{background:#deebf7;}
-  td.gantt-cell[data-category="배포"]{background:#dae3f3;}
+  td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#e8e8e8;}
+  td.gantt-cell[data-category="기획"]{background:#f3ecd7;}
+  td.gantt-cell[data-category="작성"]{background:#f3ecd7;}
+  td.gantt-cell[data-category="수정"]{background:#f0e2d6;}
+  td.gantt-cell[data-category="검토"]{background:#e4ecdd;}
+  td.gantt-cell[data-category="테스트"]{background:#eaeaea;}
+  td.gantt-cell[data-category="보고"]{background:#e2e9f0;}
+  td.gantt-cell[data-category="배포"]{background:#dfe4ee;}
 
   /* Modal */
   .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50;}
@@ -1002,15 +1004,15 @@
     });
     const html = '<!doctype html>\n<html lang="ko"><head><meta charset="utf-8">'+
       '<title>WBS 일정 관리 (' + toISO(new Date()) + ')</title><style>'+
-      'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic",sans-serif; margin:24px; color:#1f2328; background:#fff;}'+
+      'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic",sans-serif; margin:24px; color:#2b3140; background:#fff;}'+
       'h1{font-size:20px; margin:0 0 4px;} .meta{color:#6b7280; font-size:12px; margin-bottom:16px;}'+
-      'table{border-collapse:collapse; width:100%;} th,td{border:1px solid #d0d5dd; padding:6px 8px; font-size:13px; text-align:left;}'+
-      'th{background:#f2f4f7;} tr.group-row{background:#f9fafb; font-weight:600;}'+
+      'table{border-collapse:collapse; width:100%;} th,td{border:1px solid #e4e7ec; padding:6px 8px; font-size:13px; text-align:left;}'+
+      'th{background:#f6f7f9;} tr.group-row{background:#eaf0f8; color:#2e4a72; font-weight:600;}'+
       '.status-pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px;}'+
-      '.status-pill[data-status="완료"]{color:#3b6fd6; background:#e8eefc;}'+
-      '.status-pill[data-status="진행"]{color:#70ad47; background:#e2f0d9;}'+
-      '.status-pill[data-status="보류"]{color:#d1453b; background:#fbe7e6;}'+
-      '.status-pill[data-status="예정"]{color:#6b7280; background:#eef0f2;}'+
+      '.status-pill[data-status="완료"]{color:#3e5e85; background:#e6edf6;}'+
+      '.status-pill[data-status="진행"]{color:#4c7a50; background:#e7f0e7;}'+
+      '.status-pill[data-status="보류"]{color:#c1454b; background:#fbe9ea;}'+
+      '.status-pill[data-status="예정"]{color:#6b7280; background:#eef0f3;}'+
       '</style></head><body>'+
       '<h1>WBS 일정 관리</h1><div class="meta">내보낸 날짜: '+toISO(new Date())+'</div>'+
       '<table><thead><tr><th>순번</th><th>구분</th><th>상세업무</th><th>담당자</th><th>M/D</th><th>시작일</th><th>종료일</th><th>상태</th></tr></thead>'+

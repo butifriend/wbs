@@ -4,10 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WBS 일정 관리</title>
+<!-- Pretendard 동적 서브셋: 화면에 실제로 쓰인 글자 범위의 청크만 내려받습니다.
+     오프라인이거나 CDN이 막히면 아래 :root의 --font-sans 뒷부분(시스템 폰트)으로 넘어갑니다. -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
 <style>
   :root{
     /* OS가 다크 테마여도 이 화면은 항상 밝게 (날짜 입력·드롭다운 등 네이티브 컨트롤 포함) */
     color-scheme: light;
+    --font-sans: "Pretendard Variable", Pretendard, system-ui, -apple-system,
+      "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
     --bg:#f6f7f9; --panel:#ffffff; --border:#e4e7ec; --text:#2b3140; --sub:#6b7280;
     --accent:#4c6fa3; --accent-dark:#3a5a8c; --group-bg:#eaf0f8; --group-text:#2e4a72;
     --group-text-muted: rgba(46,74,114,.55); --hover-tint: rgba(76,111,163,.06);
@@ -21,7 +27,7 @@
   *{box-sizing:border-box;}
   body{
     margin:0; background:var(--bg); color:var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    font-family: var(--font-sans);
     font-size:14px;
   }
   .wrap{max-width:1500px; margin:0 auto; padding:24px 20px 80px;}
@@ -1353,6 +1359,10 @@
   function statusPillHtml(status){
     return '<span class="status-pill" data-status="'+escapeHtml(status||'예정')+'">'+escapeHtml(status||'예정')+'</span>';
   }
+  // 내려받은 HTML도 화면과 같은 글꼴로 보이도록 동일한 CDN·스택을 심어 줍니다.
+  const PRETENDARD_CSS_URL = 'https://cdn.jsdelivr.net/npm/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css';
+  const EXPORT_FONT_STACK = '"Pretendard Variable", Pretendard, system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif';
+
   function exportHtml(){
     const rowsHtml = [];
     state.groups.forEach(function(g, gi){
@@ -1369,8 +1379,9 @@
       });
     });
     const html = '<!doctype html>\n<html lang="ko"><head><meta charset="utf-8">'+
-      '<title>WBS 일정 관리 (' + toISO(new Date()) + ')</title><style>'+
-      'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic",sans-serif; margin:24px; color:#2b3140; background:#fff;}'+
+      '<title>WBS 일정 관리 (' + toISO(new Date()) + ')</title>'+
+      '<link rel="stylesheet" href="'+PRETENDARD_CSS_URL+'"><style>'+
+      'body{font-family:'+EXPORT_FONT_STACK+'; margin:24px; color:#2b3140; background:#fff;}'+
       'h1{font-size:20px; margin:0 0 4px;} .meta{color:#6b7280; font-size:12px; margin-bottom:16px;}'+
       'table{border-collapse:collapse; width:100%;} th,td{border:1px solid #e4e7ec; padding:6px 8px; font-size:13px; text-align:left;}'+
       'th{background:#f6f7f9;} tr.group-row{background:#eaf0f8; color:#2e4a72; font-weight:600;}'+

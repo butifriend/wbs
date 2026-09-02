@@ -1227,7 +1227,10 @@
       gtr.appendChild(groupTitleTd);
       tbody.appendChild(gtr);
 
-      if(g.collapsed || ganttDoneCollapsed) return;
+      // 완료 그룹은 간트 전용 토글이 표의 접기 상태보다 우선합니다.
+      // (표에서 접어둔 완료 그룹이 "펼치기"에 반응하지 않던 문제)
+      const isDoneGroup = g._status === '완료' && g.tasks.length > 0;
+      if(isDoneGroup ? ganttDoneCollapsed : g.collapsed) return;
       g.tasks.forEach(function(t, ti){
         const ttr = el('tr', {class:'gantt-row-task'});
         ganttLabelCells((gi+1)+'.'+(ti+1), t.category, t.detail).forEach(function(td){ ttr.appendChild(td); });

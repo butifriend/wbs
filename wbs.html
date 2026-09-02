@@ -6,6 +6,8 @@
 <title>WBS 일정 관리</title>
 <style>
   :root{
+    /* OS가 다크 테마여도 이 화면은 항상 밝게 (날짜 입력·드롭다운 등 네이티브 컨트롤 포함) */
+    color-scheme: light;
     --bg:#f6f7f9; --panel:#ffffff; --border:#e4e7ec; --text:#2b3140; --sub:#6b7280;
     --accent:#4c6fa3; --accent-dark:#3a5a8c; --group-bg:#eaf0f8; --group-text:#2e4a72;
     --group-text-muted: rgba(46,74,114,.55); --hover-tint: rgba(76,111,163,.06);
@@ -15,19 +17,6 @@
     --st-hold:#c1454b; --st-hold-bg:#fbe9ea;
     --st-plan:#6b7280; --st-plan-bg:#eef0f3;
     --shadow: 0 1px 3px rgba(43,49,64,.06), 0 1px 2px rgba(43,49,64,.05);
-  }
-  @media (prefers-color-scheme: dark){
-    :root{
-      --bg:#181a1f; --panel:#1f232a; --border:#2c313a; --text:#d8dce3; --sub:#8b95a3;
-      --accent:#7891b8; --accent-dark:#8fa4c4; --group-bg:#232c3a; --group-text:#c3d2e8;
-      --group-text-muted: rgba(195,210,232,.55); --hover-tint: rgba(120,145,184,.09);
-      --danger:#cf8b8d; --danger-bg:#332325;
-      --st-done:#7d97b8; --st-done-bg:#232b38;
-      --st-progress:#8fae8f; --st-progress-bg:#232b24;
-      --st-hold:#cf8b8d; --st-hold-bg:#332325;
-      --st-plan:#98a2b3; --st-plan-bg:#22252b;
-      --shadow: 0 1px 3px rgba(0,0,0,.35);
-    }
   }
   *{box-sizing:border-box;}
   body{
@@ -71,14 +60,33 @@
   .menu-panel button.danger{color:var(--danger);}
   .menu-panel button.danger:hover{background:var(--danger-bg); color:var(--danger);}
 
-  .summary{display:flex; flex-wrap:wrap; gap:10px 24px; font-size:13px;}
-  .summary .item{display:flex; align-items:center; gap:4px;}
-  .summary .item b{font-size:16px;}
-  .chip{display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:600;}
-  .chip.done{color:var(--st-done); background:var(--st-done-bg);}
-  .chip.progress{color:var(--st-progress); background:var(--st-progress-bg);}
-  .chip.hold{color:var(--st-hold); background:var(--st-hold-bg);}
-  .chip.plan{color:var(--st-plan); background:var(--st-plan-bg);}
+  /* 요약 카드 */
+  .summary{display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px;}
+  .stat-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow); padding:12px 16px; flex:0 0 auto; min-width:136px;
+  }
+  .stat-label{font-size:12px; color:var(--sub); margin-bottom:6px;}
+  .stat-value{font-size:26px; font-weight:700; line-height:1.15; white-space:nowrap;}
+  .stat-unit{font-size:12px; font-weight:600; color:var(--sub); margin-left:3px;}
+  .stat-card-period{min-width:186px;}
+  .stat-period{font-size:15px; line-height:1.45;}
+  .stat-card-progress{flex:1 1 300px; min-width:274px;}
+  .stat-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px;}
+  .stat-head .stat-label{margin-bottom:0;}
+  .stat-total{font-size:12px; color:var(--sub); white-space:nowrap;}
+  .progress-track{
+    display:flex; height:8px; border-radius:999px; overflow:hidden;
+    background:var(--border); margin:10px 0 9px;
+  }
+  .progress-seg{height:100%;}
+  .stat-legend{display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px;}
+  .legend-item{display:inline-flex; align-items:center; gap:5px; color:var(--sub); white-space:nowrap;}
+  .legend-dot{width:8px; height:8px; border-radius:50%; flex:0 0 auto;}
+  .seg-done{background:var(--st-done);}
+  .seg-progress{background:var(--st-progress);}
+  .seg-hold{background:var(--st-hold);}
+  .seg-plan{background:var(--st-plan);}
 
   table{width:100%; min-width:1340px; border-collapse:collapse; table-layout:fixed;}
   col.c-no{width:56px;} col.c-cat{width:90px;} col.c-detail{width:auto;}
@@ -146,7 +154,9 @@
   .empty{text-align:center; color:var(--sub); padding:30px !important;}
 
   /* Gantt (weekly grid table) */
-  #ganttSection h2{font-size:16px; margin:0 0 10px;}
+  .gantt-head{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 10px;}
+  #ganttSection h2{font-size:16px; margin:0;}
+  .gantt-collapsed-note{font-weight:400; font-size:11px; opacity:.65;}
   .gantt-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:8px;}
   .gantt-table{border-collapse:collapse; font-size:11.5px; table-layout:fixed;}
   .gantt-table col.g-col-no{width:44px;}
@@ -208,42 +218,41 @@
   <h1>WBS 일정 관리</h1>
   <p class="desc">시작일과 M/D(공수)를 입력하면 대한민국 공휴일과 주말을 제외한 영업일 기준으로 종료일이 자동 계산됩니다.</p>
 
-  <div class="panel no-print">
-    <div class="toolbar">
-      <div class="spacer"></div>
-      <button class="primary" id="btnAddGroup">+ 그룹 추가</button>
-      <button class="primary" id="btnSaveNow" title="구분/상세업무 등 텍스트 입력은 즉시 간트차트에 반영되지 않습니다. 입력 후 이 버튼을 눌러 반영하세요.">저장</button>
-      <span id="syncBadge" class="sync-badge" style="display:none;"></span>
-      <div class="menu-wrap" id="menuWrap">
-        <button id="btnMenuToggle" class="menu-toggle">기능모음 ▾</button>
-        <div class="menu-panel hidden" id="menuPanel">
-          <div class="menu-group">
-            <div class="menu-label">설정</div>
-            <button id="btnHolidays">공휴일 관리</button>
-            <button id="btnSyncSettings">동기화 설정</button>
-          </div>
-          <div class="menu-group">
-            <div class="menu-label">내보내기 · 가져오기</div>
-            <button id="btnExportJson">JSON 내보내기</button>
-            <button id="btnImportJsonTrigger">JSON 가져오기</button>
-            <button id="btnExportCsv">CSV 내보내기</button>
-            <button id="btnExportXlsx">엑셀 다운로드 (.xlsx)</button>
-            <button id="btnExportHtml">HTML 다운로드</button>
-          </div>
-          <div class="menu-group">
-            <div class="menu-label">인쇄</div>
-            <button id="btnPrint">인쇄</button>
-          </div>
-          <div class="menu-group">
-            <div class="menu-label">위험</div>
-            <button class="danger" id="btnClearAll">전체 초기화</button>
-          </div>
+  <div class="toolbar no-print">
+    <div class="spacer"></div>
+    <button class="primary" id="btnAddGroup">+ 그룹 추가</button>
+    <button class="primary" id="btnSaveNow" title="지금 바로 동기화 서버에 올립니다. (입력 내용은 칸을 벗어날 때 자동으로 반영·저장됩니다)">저장</button>
+    <span id="syncBadge" class="sync-badge" style="display:none;"></span>
+    <div class="menu-wrap" id="menuWrap">
+      <button id="btnMenuToggle" class="menu-toggle">기능모음 ▾</button>
+      <div class="menu-panel hidden" id="menuPanel">
+        <div class="menu-group">
+          <div class="menu-label">설정</div>
+          <button id="btnHolidays">공휴일 관리</button>
+          <button id="btnSyncSettings">동기화 설정</button>
+        </div>
+        <div class="menu-group">
+          <div class="menu-label">내보내기 · 가져오기</div>
+          <button id="btnExportJson">JSON 내보내기</button>
+          <button id="btnImportJsonTrigger">JSON 가져오기</button>
+          <button id="btnExportCsv">CSV 내보내기</button>
+          <button id="btnExportXlsx">엑셀 다운로드 (.xlsx)</button>
+          <button id="btnExportHtml">HTML 다운로드</button>
+        </div>
+        <div class="menu-group">
+          <div class="menu-label">인쇄</div>
+          <button id="btnPrint">인쇄</button>
+        </div>
+        <div class="menu-group">
+          <div class="menu-label">위험</div>
+          <button class="danger" id="btnClearAll">전체 초기화</button>
         </div>
       </div>
-      <input type="file" id="fileImport" accept="application/json" style="display:none">
     </div>
-    <div class="summary" id="summaryBar"></div>
+    <input type="file" id="fileImport" accept="application/json" style="display:none">
   </div>
+
+  <div class="summary no-print" id="summaryBar"></div>
 
   <div class="panel" style="padding:0; overflow-x:auto;">
     <table id="wbsTable">
@@ -265,10 +274,14 @@
     종료일은 시작일 + M/D 만큼의 <b>영업일</b>(주말·공휴일 제외)을 계산하여 자동으로 채워집니다.
     종료일을 직접 수정하면 해당 행은 <span class="badge-manual" style="display:inline">수동</span>으로 표시되고 더 이상 자동 계산되지 않습니다 — ↺ 버튼으로 자동 계산으로 되돌릴 수 있습니다.
     대한민국 공휴일은 연도에 관계없이 자동으로 반영되며(대체공휴일 포함), 상단 <b>공휴일 관리</b>에서 직접 추가·삭제도 가능합니다.
+    <div id="holidayWarn" class="weekend-warn" style="display:none; margin-top:8px;"></div>
   </div>
 
   <div class="panel" id="ganttSection">
-    <h2>일정 간트차트</h2>
+    <div class="gantt-head">
+      <h2>일정 간트차트</h2>
+      <button class="small no-print" id="btnGanttDoneToggle" style="display:none;"></button>
+    </div>
     <div class="gantt-scroll">
       <div class="gantt-inner" id="ganttInner"></div>
     </div>
@@ -278,11 +291,7 @@
 <div class="modal-overlay hidden" id="holidayModal">
   <div class="modal">
     <h2>공휴일 관리 (대한민국 기준)</h2>
-    <p style="font-size:12px; color:var(--sub); line-height:1.6; margin-top:-6px;">
-      신정·삼일절·어린이날·현충일·광복절·개천절·한글날·크리스마스·근로자의 날은 연도별로 자동 계산되어 반영되며,
-      대체공휴일 규정도 함께 적용됩니다. 설날·추석·부처님오신날처럼 음력 기준인 공휴일은 2025~2026년까지 등록되어 있으며,
-      그 외 연도나 회사 자체 휴일은 아래에서 직접 추가할 수 있습니다.
-    </p>
+    <p style="font-size:12px; color:var(--sub); line-height:1.6; margin-top:-6px;" id="holidayNote"></p>
     <div class="holiday-form">
       <input type="date" id="hdDate">
       <input type="text" id="hdName" placeholder="공휴일명">
@@ -351,7 +360,7 @@
   /* ---------------- Holidays (Korea) ---------------- */
   // 음력 기준 공휴일(설날·추석·부처님오신날)은 매년 날짜가 달라 계산식으로 구할 수 없어
   // 실제 관보 고시 날짜를 미리 입력해 둔 표입니다. 아래 연도는 대체공휴일까지 포함해 검증된 값입니다.
-  const CURATED_LUNAR_YEARS = {2025:true, 2026:true};
+  const CURATED_LUNAR_YEARS = {2025:true, 2026:true, 2027:true};
   const CURATED_LUNAR_HOLIDAYS = {
     "2025-01-01":"신정","2025-01-27":"임시공휴일","2025-01-28":"설날 연휴","2025-01-29":"설날","2025-01-30":"설날 연휴",
     "2025-03-01":"삼일절","2025-03-03":"대체공휴일(삼일절)","2025-05-01":"근로자의 날","2025-05-05":"어린이날·부처님오신날",
@@ -361,7 +370,11 @@
     "2026-03-02":"대체공휴일(삼일절)","2026-05-01":"근로자의 날","2026-05-05":"어린이날","2026-05-24":"부처님오신날",
     "2026-05-25":"대체공휴일(부처님오신날)","2026-06-06":"현충일","2026-08-15":"광복절","2026-08-17":"대체공휴일(광복절)",
     "2026-09-24":"추석 연휴","2026-09-25":"추석","2026-09-26":"추석 연휴","2026-10-03":"개천절","2026-10-05":"대체공휴일(개천절)",
-    "2026-10-09":"한글날","2026-12-25":"크리스마스"
+    "2026-10-09":"한글날","2026-12-25":"크리스마스",
+    // 2027: 설날 2/7(일)이라 연휴가 일요일과 겹쳐 2/9(화) 대체공휴일이 붙습니다.
+    // 추석은 9/14(화)~9/16(목)로 주말과 겹치지 않아 대체공휴일이 없습니다.
+    "2027-02-06":"설날 연휴","2027-02-07":"설날","2027-02-08":"설날 연휴","2027-02-09":"대체공휴일(설날)",
+    "2027-05-13":"부처님오신날","2027-09-14":"추석 연휴","2027-09-15":"추석","2027-09-16":"추석 연휴"
   };
 
   // 날짜가 고정된 공휴일은 연도만 주어지면 계산식으로 자동 생성하고,
@@ -374,11 +387,14 @@
       {m:5, d:1, name:'근로자의 날', sub:false},
       {m:5, d:5, name:'어린이날', sub:true},
       {m:6, d:6, name:'현충일', sub:false},
+      // 제헌절은 2008년 공휴일에서 빠졌다가 2026-05-11 시행 개정으로 다시 공휴일이 되었습니다.
+      {m:7, d:17, name:'제헌절', sub:true, from:2026},
       {m:8, d:15, name:'광복절', sub:true},
       {m:10, d:3, name:'개천절', sub:true},
       {m:10, d:9, name:'한글날', sub:true},
-      {m:12, d:25, name:'크리스마스', sub:false}
-    ];
+      // 크리스마스는 2023년 개정으로 대체공휴일 대상에 포함되었습니다.
+      {m:12, d:25, name:'크리스마스', sub:true}
+    ].filter(function(h){ return !h.from || year >= h.from; });
     base.forEach(function(h){
       map[toISO(new Date(year, h.m-1, h.d))] = h.name;
     });
@@ -431,16 +447,18 @@
     return {minY:minY, maxY:maxY};
   }
 
+  // 양력 공휴일은 모든 연도에 대해 계산으로 만들고, 음력 공휴일이 등록된 연도만
+  // 그 표를 위에 덮어씁니다. (예전에는 둘 중 하나만 써서, 큐레이션되지 않은 연도에는
+  // 설날·추석·부처님오신날이 통째로 빠진 채 영업일이 계산됐습니다.)
   function rebuildHolidays(){
     const range = yearsInScope();
     const map = {};
     for(let y=range.minY; y<=range.maxY; y++){
+      Object.assign(map, computeFixedHolidaysForYear(y));
       if(CURATED_LUNAR_YEARS[y]){
         Object.keys(CURATED_LUNAR_HOLIDAYS).forEach(function(k){
           if(Number(k.slice(0,4))===y) map[k] = CURATED_LUNAR_HOLIDAYS[k];
         });
-      } else {
-        Object.assign(map, computeFixedHolidaysForYear(y));
       }
     }
     autoHolidays = map;
@@ -457,9 +475,11 @@
     return true;
   }
   function addBusinessDays(startStr, md){
-    const needed = Math.max(1, Math.ceil(Number(md)||0));
     let d = parseISO(startStr);
     if(!d) return '';
+    // M/D 0은 공수 없는 마일스톤으로 보고 종료일을 시작일과 같게 둡니다.
+    const needed = Math.ceil(Number(md)||0);
+    if(needed<=0) return toISO(d);
     let count=0, guard=0;
     while(true){
       if(isBusinessDay(d)){ count++; if(count===needed) break; }
@@ -492,6 +512,42 @@
     return Object.assign({ id: uid(), category:'', title:'', tasks:[], collapsed:false }, overrides||{});
   }
 
+  const STATUS_VALUES = ['예정','진행','완료','보류'];
+  function safeDateStr(v){ return (typeof v === 'string' && parseISO(v)) ? v : ''; }
+
+  // 밖에서 들어온 데이터(로컬 저장소·JSON 파일·동기화 서버)를 그대로 믿지 않고 형태를 맞춰 줍니다.
+  // groups 배열조차 없으면 null을 돌려주고, 부르는 쪽에서 거부하도록 합니다.
+  function sanitizeState(data){
+    if(!data || typeof data !== 'object' || !Array.isArray(data.groups)) return null;
+    const groups = data.groups.filter(function(g){ return g && typeof g === 'object'; }).map(function(g){
+      const tasks = Array.isArray(g.tasks) ? g.tasks : [];
+      return {
+        id: (typeof g.id === 'string' && g.id) ? g.id : uid(),
+        category: g.category==null ? '' : String(g.category),
+        title: g.title==null ? '' : String(g.title),
+        collapsed: g.collapsed === true,
+        tasks: tasks.filter(function(t){ return t && typeof t === 'object'; }).map(function(t){
+          const md = Number(t.md);
+          return {
+            id: (typeof t.id === 'string' && t.id) ? t.id : uid(),
+            category: t.category==null ? '' : String(t.category),
+            detail: t.detail==null ? '' : String(t.detail),
+            assignee: t.assignee==null ? '' : String(t.assignee),
+            md: (isFinite(md) && md>=0) ? md : 0,
+            start: safeDateStr(t.start),
+            end: safeDateStr(t.end),
+            endManual: t.endManual === true,
+            status: STATUS_VALUES.indexOf(t.status)!==-1 ? t.status : '예정'
+          };
+        })
+      };
+    });
+    return { groups: groups };
+  }
+  function countTasks(s){
+    return s.groups.reduce(function(n,g){ return n + (g.tasks ? g.tasks.length : 0); }, 0);
+  }
+
   function seedData(){
     const g1 = makeGroup({ category:'영업자료', title:'A10 업무유형별 활용 가이드 리뉴얼 - 연말정산' });
     g1.tasks = [
@@ -516,48 +572,167 @@
   let syncStatusMessage = '';
   let syncTimer = null;
 
+  // 원격 데이터를 한 번도 읽지 못한 세션은 자동 업로드를 막습니다.
+  // 이게 없으면 네트워크가 잠깐 끊겼을 때 이 브라우저의 오래된(또는 시드) 데이터가
+  // 1.2초 뒤 팀 시트를 통째로 덮어씁니다.
+  let syncBlocked = false;
+  // 서버 데이터를 화면에 채워 넣는 동안에는 되돌려 올리지 않기 위한 플래그입니다.
+  let suppressRemotePush = false;
+  // 서버에서 마지막으로 확인한 리비전. POST할 때 함께 보내 그 사이 다른 사람이
+  // 저장했는지 서버가 판별합니다. null이면 아직 서버를 읽은 적이 없다는 뜻입니다.
+  let remoteRev = null;
+  let remoteUpdatedAt = '';
+  // 구버전 Code.gs가 배포돼 있으면 리비전을 돌려주지 않습니다. 그때는 충돌 감지가 꺼집니다.
+  let conflictSupported = true;
+
   function loadSyncUrl(){
     try{ syncUrl = localStorage.getItem(SYNC_URL_KEY) || ''; }catch(e){ syncUrl = ''; }
   }
   function persistSyncUrl(url){
     syncUrl = url;
+    remoteRev = null;
+    remoteUpdatedAt = '';
+    syncBlocked = false;
+    conflictSupported = true;
     try{ localStorage.setItem(SYNC_URL_KEY, url); }catch(e){ console.warn('동기화 URL 저장 실패:', e); }
   }
   function nowKST(){ return new Date().toLocaleTimeString('ko-KR'); }
+  function fmtRemoteTime(s){
+    if(!s) return '시각 미상';
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? String(s) : d.toLocaleString('ko-KR');
+  }
 
   async function fetchRemoteState(){
     const res = await fetch(syncUrl, {method:'GET', cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
-    if(!data || !Array.isArray(data.groups)) throw new Error('올바른 데이터 형식이 아닙니다');
-    return data;
+    const clean = sanitizeState(data);
+    if(!clean) throw new Error('올바른 데이터 형식이 아닙니다');
+    return {
+      state: clean,
+      rev: (data && typeof data.rev === 'number') ? data.rev : null,
+      updatedAt: (data && typeof data.updatedAt === 'string') ? data.updatedAt : ''
+    };
   }
-  async function pushRemoteState(){
-    if(!syncUrl) return;
+
+  // 서버가 충돌을 알려오면 자동 업로드를 멈추고 사용자에게 어느 쪽을 살릴지 물어봅니다.
+  function handleConflict(result){
+    const remote = sanitizeState(result.data);
+    syncBlocked = true;
+    syncStatus = 'error';
+    syncStatusMessage = '다른 사람이 먼저 저장했습니다 ('+fmtRemoteTime(result.updatedAt)+') · 자동 업로드를 중지했습니다';
+    renderSyncStatus();
+    if(!remote){
+      alert('다른 사람이 먼저 저장한 내용이 있는데, 그 내용을 읽을 수 없습니다.\n동기화 설정에서 "지금 동기화"로 다시 시도해주세요.');
+      return;
+    }
+    const msg =
+      '다른 사람이 먼저 저장한 내용이 서버에 있습니다.\n' +
+      '서버: 그룹 '+remote.groups.length+'개 / 업무 '+countTasks(remote)+'개 (저장 '+fmtRemoteTime(result.updatedAt)+')\n' +
+      '화면: 그룹 '+state.groups.length+'개 / 업무 '+countTasks(state)+'개\n\n' +
+      '[확인] 서버의 최신 내용을 불러옵니다 (지금 화면의 수정 내용은 사라집니다)\n' +
+      '[취소] 화면을 그대로 두고 업로드만 중지합니다 (동기화 설정 → 지금 동기화 에서 다시 선택 가능)';
+    if(confirm(msg)){
+      adoptRemote(remote, result.rev, result.updatedAt);
+    }
+  }
+
+  // 서버 데이터를 화면에 반영합니다. 이 과정에서 다시 서버로 올리지는 않습니다.
+  function adoptRemote(cleanState, rev, updatedAt){
+    state = cleanState;
+    remoteRev = (typeof rev === 'number') ? rev : null;
+    remoteUpdatedAt = updatedAt || '';
+    syncBlocked = false;
+    syncStatus = 'ok';
+    syncStatusMessage = '서버 최신본을 불러왔습니다 · '+nowKST();
+    suppressRemotePush = true;
+    try{ fullRender(); } finally { suppressRemotePush = false; }
+    renderSyncStatus();
+  }
+
+  async function pushRemoteState(opts){
+    if(!syncUrl) return false;
+    const force = !!(opts && opts.force);
+    if(syncBlocked && !force) return false;
     syncStatus = 'syncing'; syncStatusMessage = '동기화 중...'; renderSyncStatus();
     try{
+      const payload = Object.assign({}, state, {_baseRev: remoteRev, _force: force});
       const res = await fetch(syncUrl, {
         method:'POST',
         headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify(state)
+        body: JSON.stringify(payload)
       });
       let result = {};
       try{ result = await res.json(); }catch(e){}
+      if(result && result.conflict){
+        handleConflict(result);
+        return false;
+      }
       if(!res.ok || result.ok===false) throw new Error(result.error || ('HTTP '+res.status));
+      if(typeof result.rev === 'number'){
+        remoteRev = result.rev;
+        remoteUpdatedAt = typeof result.updatedAt === 'string' ? result.updatedAt : '';
+        conflictSupported = true;
+      } else {
+        // 구버전 Code.gs. 저장은 되지만 동시 편집을 막아주지는 못합니다.
+        conflictSupported = false;
+      }
+      syncBlocked = false;
       syncStatus = 'ok';
-      syncStatusMessage = '연결됨 · 마지막 저장 '+nowKST();
+      syncStatusMessage = '연결됨 · 마지막 저장 '+nowKST() +
+        (conflictSupported ? '' : ' · 동시편집 감지 미지원(Code.gs 업데이트 필요)');
     }catch(e){
       syncStatus = 'error';
       syncStatusMessage = '동기화 실패: '+e.message;
       console.warn('원격 동기화 저장 실패:', e);
     }
     renderSyncStatus();
+    return syncStatus === 'ok';
   }
-  function debouncedRemoteSync(){
+
+  // 사용자가 직접 "저장"/"지금 동기화"를 누른 경우. 업로드가 막힌 상태라면
+  // 서버를 먼저 다시 읽어보고, 어느 쪽을 남길지 분명히 물어본 뒤에만 덮어씁니다.
+  async function requestPush(){
     if(!syncUrl) return;
+    if(!syncBlocked){
+      clearTimeout(syncTimer);
+      await pushRemoteState();
+      return;
+    }
+    syncStatus = 'syncing'; syncStatusMessage = '서버 상태 확인 중...'; renderSyncStatus();
+    let remote = null;
+    try{
+      remote = await fetchRemoteState();
+    }catch(e){
+      syncStatus = 'error';
+      syncStatusMessage = '서버에 연결할 수 없어 저장하지 못했습니다: '+e.message;
+      renderSyncStatus();
+      alert('동기화 서버에 연결할 수 없어 올리지 못했습니다.\n작업 내용은 이 브라우저에 저장되어 있으니, 연결이 복구된 뒤 다시 시도해주세요.');
+      return;
+    }
+    remoteRev = remote.rev;
+    remoteUpdatedAt = remote.updatedAt;
+    const msg =
+      '서버: 그룹 '+remote.state.groups.length+'개 / 업무 '+countTasks(remote.state)+'개 (저장 '+fmtRemoteTime(remote.updatedAt)+')\n' +
+      '화면: 그룹 '+state.groups.length+'개 / 업무 '+countTasks(state)+'개\n\n' +
+      '[확인] 이 화면의 내용으로 서버를 덮어씁니다\n' +
+      '[취소] 서버 내용을 불러와 화면을 바꿉니다';
+    if(confirm(msg)){
+      syncBlocked = false;
+      clearTimeout(syncTimer);
+      await pushRemoteState({force:true});
+    } else {
+      adoptRemote(remote.state, remote.rev, remote.updatedAt);
+    }
+  }
+
+  function debouncedRemoteSync(){
+    if(!syncUrl || syncBlocked || suppressRemotePush) return;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(pushRemoteState, 1200);
   }
+
   function renderSyncStatus(){
     const badge = document.getElementById('syncBadge');
     if(badge){
@@ -565,8 +740,11 @@
         badge.style.display = 'none';
       } else {
         badge.style.display = 'inline-flex';
-        badge.setAttribute('data-state', syncStatus);
-        const label = syncStatus==='syncing' ? '☁ 동기화 중' : syncStatus==='error' ? '⚠ 동기화 오류' : '☁ 동기화됨';
+        badge.setAttribute('data-state', syncBlocked ? 'error' : syncStatus);
+        const label = syncBlocked ? '⚠ 업로드 중지됨'
+          : syncStatus==='syncing' ? '☁ 동기화 중'
+          : syncStatus==='error' ? '⚠ 동기화 오류'
+          : '☁ 동기화됨';
         badge.textContent = label;
         badge.title = syncStatusMessage;
       }
@@ -579,11 +757,19 @@
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.warn('WBS 저장 실패:', e); }
     debouncedRemoteSync();
   }
+  const BROKEN_KEY = STORAGE_KEY + '_broken';
   function load(){
     let raw = null;
     try{ raw = localStorage.getItem(STORAGE_KEY); }catch(e){ console.warn('WBS 불러오기 실패:', e); }
     if(raw){
-      try{ state = JSON.parse(raw); return; } catch(e){}
+      let parsed = null;
+      try{ parsed = JSON.parse(raw); }catch(e){ console.warn('저장된 WBS 데이터를 해석하지 못했습니다:', e); }
+      const clean = sanitizeState(parsed);
+      if(clean){ state = clean; return; }
+      // 형태가 깨진 데이터를 시드 데이터로 덮어쓰기 전에 원본을 따로 보관합니다.
+      // (localStorage의 wbs_data_v1_broken 키에서 꺼내볼 수 있습니다)
+      console.warn('저장된 WBS 데이터의 형식이 올바르지 않아 기본 데이터로 시작합니다. 원본은 '+BROKEN_KEY+' 에 보관했습니다.');
+      try{ localStorage.setItem(BROKEN_KEY, raw); }catch(e){}
     }
     seedData();
   }
@@ -641,6 +827,16 @@
     renderTable();
     renderSummary();
     renderGantt();
+    renderHolidayCoverage();
+    save();
+  }
+
+  // 텍스트 입력은 표를 다시 그리면 편집 중이던 칸의 포커스와 Tab 이동이 끊깁니다.
+  // 그래서 칸을 벗어날 때 표는 그대로 두고 요약·간트만 다시 계산합니다.
+  function refreshDerived(){
+    recalcAll();
+    renderSummary();
+    renderGantt();
     save();
   }
 
@@ -679,10 +875,10 @@
     tr.appendChild(noTd);
 
     tr.appendChild(el('td', {}, [
-      el('input', {type:'text', draggable:'false', value:g.category, placeholder:'구분', oninput:function(e){ g.category=e.target.value; debouncedSave(); }})
+      el('input', {type:'text', draggable:'false', value:g.category, placeholder:'구분', oninput:function(e){ g.category=e.target.value; debouncedSave(); }, onblur:refreshDerived})
     ]));
     tr.appendChild(el('td', {}, [
-      el('input', {type:'text', draggable:'false', value:g.title, placeholder:'상세업무(그룹명)', oninput:function(e){ g.title=e.target.value; debouncedSave(); }})
+      el('input', {type:'text', draggable:'false', value:g.title, placeholder:'상세업무(그룹명)', oninput:function(e){ g.title=e.target.value; debouncedSave(); }, onblur:refreshDerived})
     ]));
     tr.appendChild(el('td', {}, ['']));
     tr.appendChild(el('td', {class:'col-md'}, [String(g._md||0)]));
@@ -736,13 +932,13 @@
     });
     tr.appendChild(el('td', {class:'col-no'}, [gi+1+'.'+(ti+1)]));
     tr.appendChild(el('td', {}, [
-      el('input', {type:'text', draggable:'false', value:t.category, placeholder:'구분', oninput:function(e){ t.category=e.target.value; debouncedSave(); }})
+      el('input', {type:'text', draggable:'false', value:t.category, placeholder:'구분', oninput:function(e){ t.category=e.target.value; debouncedSave(); }, onblur:refreshDerived})
     ]));
     tr.appendChild(el('td', {}, [
-      el('input', {type:'text', draggable:'false', value:t.detail, placeholder:'상세업무', oninput:function(e){ t.detail=e.target.value; debouncedSave(); }})
+      el('input', {type:'text', draggable:'false', value:t.detail, placeholder:'상세업무', oninput:function(e){ t.detail=e.target.value; debouncedSave(); }, onblur:refreshDerived})
     ]));
     tr.appendChild(el('td', {}, [
-      el('input', {type:'text', draggable:'false', value:t.assignee, placeholder:'담당자', oninput:function(e){ t.assignee=e.target.value; debouncedSave(); }})
+      el('input', {type:'text', draggable:'false', value:t.assignee, placeholder:'담당자', oninput:function(e){ t.assignee=e.target.value; debouncedSave(); }, onblur:refreshDerived})
     ]));
     tr.appendChild(el('td', {class:'col-md'}, [
       el('input', {type:'number', min:'0', step:'1', value:String(t.md), onchange:function(e){
@@ -832,27 +1028,81 @@
     const counts = {완료:0, 진행:0, 보류:0, 예정:0};
     allTasks.forEach(function(t){ counts[t.status] = (counts[t.status]||0)+1; });
 
-    function item(label, value){
-      return el('div', {class:'item'}, [label+' : ', el('b', {}, [value])]);
+    const total = allTasks.length;
+
+    function statCard(label, valueNode, extraClass){
+      return el('div', {class:'stat-card'+(extraClass ? ' '+extraClass : '')}, [
+        el('div', {class:'stat-label'}, [label]),
+        valueNode
+      ]);
     }
-    bar.appendChild(item('그룹 수', String(state.groups.length)));
-    bar.appendChild(item('전체 업무 수', String(allTasks.length)));
-    bar.appendChild(item('총 M/D', String(totalMd)));
-    bar.appendChild(item('전체 기간', starts.length ? (fmtDisplay(starts[0])+' ~ '+fmtDisplay(ends[ends.length-1])) : '-'));
-    const statusWrap = el('div', {class:'item'}, ['상태 : ']);
-    const chipRow = el('div', {}, []);
-    chipRow.appendChild(el('span', {class:'chip done'}, ['완료 '+counts.완료]));
-    chipRow.appendChild(document.createTextNode(' '));
-    chipRow.appendChild(el('span', {class:'chip progress'}, ['진행 '+counts.진행]));
-    chipRow.appendChild(document.createTextNode(' '));
-    chipRow.appendChild(el('span', {class:'chip hold'}, ['보류 '+counts.보류]));
-    chipRow.appendChild(document.createTextNode(' '));
-    chipRow.appendChild(el('span', {class:'chip plan'}, ['예정 '+counts.예정]));
-    statusWrap.appendChild(chipRow);
-    bar.appendChild(statusWrap);
+    function statValue(value, unit){
+      return el('div', {class:'stat-value'}, [
+        value,
+        unit ? el('span', {class:'stat-unit'}, [unit]) : null
+      ]);
+    }
+
+    bar.appendChild(statCard('그룹 수', statValue(String(state.groups.length), '개')));
+    bar.appendChild(statCard('전체 업무 수', statValue(String(total), '건')));
+    bar.appendChild(statCard('총 M/D', statValue(String(totalMd), 'MD')));
+
+    // 시작일만 있고 종료일이 하나도 없으면 기간을 반쪽으로 보여주지 않고 '-' 로 둡니다.
+    const periodNode = el('div', {class:'stat-value stat-period'},
+      (starts.length && ends.length)
+        ? [el('div', {}, [fmtDisplay(starts[0])]), el('div', {}, ['~ '+fmtDisplay(ends[ends.length-1])])]
+        : [el('div', {}, ['-'])]
+    );
+    bar.appendChild(statCard('전체 기간', periodNode, 'stat-card-period'));
+
+    const SEGMENTS = [
+      {key:'완료', cls:'seg-done'},
+      {key:'진행', cls:'seg-progress'},
+      {key:'보류', cls:'seg-hold'},
+      {key:'예정', cls:'seg-plan'}
+    ];
+    const track = el('div', {class:'progress-track'});
+    SEGMENTS.forEach(function(s){
+      const n = counts[s.key] || 0;
+      if(!total || !n) return;
+      track.appendChild(el('div', {
+        class:'progress-seg '+s.cls,
+        style:'width:'+(n/total*100)+'%',
+        title:s.key+' '+n+'건'
+      }));
+    });
+    const legend = el('div', {class:'stat-legend'});
+    SEGMENTS.forEach(function(s){
+      legend.appendChild(el('span', {class:'legend-item'}, [
+        el('span', {class:'legend-dot '+s.cls}),
+        s.key+' '+(counts[s.key] || 0)
+      ]));
+    });
+    bar.appendChild(el('div', {class:'stat-card stat-card-progress'}, [
+      el('div', {class:'stat-head'}, [
+        el('div', {class:'stat-label'}, ['진행 현황']),
+        el('div', {class:'stat-total'}, ['전체 '+total+'건'])
+      ]),
+      track,
+      legend
+    ]));
   }
 
   /* ---------------- Gantt (weekly grid, month-relative weeks: 1~7일=1w, 8~14일=2w ...) ---------------- */
+  // 간트차트에서 완료된 그룹의 상세 업무를 펼쳐 볼지 여부. 데이터가 아니라 화면 표시 설정이라
+  // WBS 본문(state)과 분리해 이 브라우저에만 저장합니다. 동기화 서버로 올라가지 않습니다.
+  const GANTT_SHOW_DONE_KEY = 'wbs_gantt_show_done_v1';
+  let ganttShowDone = false;
+  function loadGanttPref(){
+    try{ ganttShowDone = localStorage.getItem(GANTT_SHOW_DONE_KEY) === '1'; }catch(e){ ganttShowDone = false; }
+  }
+  function saveGanttPref(){
+    try{ localStorage.setItem(GANTT_SHOW_DONE_KEY, ganttShowDone ? '1' : '0'); }catch(e){}
+  }
+  function isGanttDoneCollapsed(g){
+    return g._status === '완료' && g.tasks.length > 0 && !ganttShowDone;
+  }
+
   function buildWeeks(minStartStr, maxEndStr){
     const minD = parseISO(minStartStr), maxD = parseISO(maxEndStr);
     let y = minD.getFullYear(), m = minD.getMonth();
@@ -883,6 +1133,26 @@
     return t>=week.start && t<=week.end;
   }
 
+  // 완료된 그룹이 하나도 없으면 버튼 자체를 감춥니다.
+  function renderGanttDoneToggle(){
+    const btn = document.getElementById('btnGanttDoneToggle');
+    if(!btn) return;
+    const doneCount = state.groups.filter(function(g){
+      return g._status === '완료' && g.tasks.length > 0;
+    }).length;
+    if(doneCount === 0){
+      btn.style.display = 'none';
+      return;
+    }
+    btn.style.display = '';
+    btn.textContent = ganttShowDone
+      ? '완료 ' + doneCount + '개 그룹 접기 ▴'
+      : '완료 ' + doneCount + '개 그룹 펼치기 ▾';
+    btn.title = ganttShowDone
+      ? '완료된 그룹의 상세 업무를 다시 접습니다'
+      : '완료된 그룹의 상세 업무를 펼쳐서 봅니다';
+  }
+
   function ganttLabelCells(no, category, title){
     return [
       el('td', {class:'sticky-c1'}, [no]),
@@ -894,6 +1164,7 @@
   function renderGantt(){
     const container = document.getElementById('ganttInner');
     container.innerHTML = '';
+    renderGanttDoneToggle();
     let allTasks = [];
     state.groups.forEach(function(g){ allTasks = allTasks.concat(g.tasks); });
     const validStarts = allTasks.map(function(t){ return t.start; }).filter(Boolean);
@@ -948,10 +1219,15 @@
       gtr.appendChild(el('td', {class:'sticky-c2'}, [g.category||'']));
       const groupTitleTd = el('td', {class:'gantt-group-title', colspan:String(weeks.length+2)}, [g.title||'(제목없음)']);
       if(g._start && g._end) groupTitleTd.title = (g.title||'')+' ('+fmtDisplay(g._start)+' ~ '+fmtDisplay(g._end)+', '+g._md+'MD)';
+      // 접혀 있으면 막대가 보이지 않으므로, 왜 비었는지 그룹 행에 표시해 줍니다.
+      const ganttDoneCollapsed = isGanttDoneCollapsed(g);
+      if(ganttDoneCollapsed){
+        groupTitleTd.appendChild(el('span', {class:'gantt-collapsed-note'}, [' · 완료 '+g.tasks.length+'건 접힘']));
+      }
       gtr.appendChild(groupTitleTd);
       tbody.appendChild(gtr);
 
-      if(g.collapsed) return;
+      if(g.collapsed || ganttDoneCollapsed) return;
       g.tasks.forEach(function(t, ti){
         const ttr = el('tr', {class:'gantt-row-task'});
         ganttLabelCells((gi+1)+'.'+(ti+1), t.category, t.detail).forEach(function(td){ ttr.appendChild(td); });
@@ -971,6 +1247,42 @@
   }
 
   /* ---------------- Holiday modal ---------------- */
+  // 음력 공휴일(설날·추석·부처님오신날)은 계산식으로 구할 수 없어 등록된 연도까지만 반영됩니다.
+  // 일정이 그 범위를 넘어가면 영업일 계산이 조용히 틀어지므로 화면에 알려줍니다.
+  function lunarCoverage(){
+    const ys = Object.keys(CURATED_LUNAR_YEARS).map(Number).sort(function(a,b){ return a-b; });
+    return {min: ys[0], max: ys[ys.length-1]};
+  }
+  function maxTaskYear(){
+    let maxY = 0;
+    state.groups.forEach(function(g){
+      (g.tasks||[]).forEach(function(t){
+        [t.start, t.end].forEach(function(s){
+          if(s && s.length>=4){ const y = Number(s.slice(0,4)); if(y>maxY) maxY = y; }
+        });
+      });
+    });
+    return maxY;
+  }
+  function renderHolidayCoverage(){
+    const cov = lunarCoverage();
+    const over = maxTaskYear() > cov.max;
+    const note = document.getElementById('holidayNote');
+    if(note){
+      note.textContent =
+        '신정·삼일절·근로자의 날·어린이날·현충일·제헌절·광복절·개천절·한글날·크리스마스는 연도에 관계없이 자동 계산되며, 대체공휴일 규정도 함께 적용됩니다. ' +
+        '설날·추석·부처님오신날처럼 음력 기준인 공휴일은 '+cov.min+'~'+cov.max+'년까지 등록되어 있습니다. ' +
+        (cov.max+1)+'년 이후 일정을 잡을 때는 해당 연도의 설날·추석·부처님오신날을 아래에서 직접 추가해주세요.';
+    }
+    const warn = document.getElementById('holidayWarn');
+    if(warn){
+      warn.style.display = over ? 'block' : 'none';
+      warn.textContent = over
+        ? '주의: '+(cov.max+1)+'년 이후 일정이 있습니다. 설날·추석·부처님오신날은 '+cov.max+'년까지만 등록되어 있어 그 이후 종료일 계산에는 반영되지 않습니다. 공휴일 관리에서 직접 추가해주세요.'
+        : '';
+    }
+  }
+
   function renderHolidayList(highlightKey){
     const list = document.getElementById('holidayList');
     list.innerHTML = '';
@@ -1417,7 +1729,7 @@
   });
   document.getElementById('btnSaveNow').addEventListener('click', function(){
     fullRender();
-    if(syncUrl){ clearTimeout(syncTimer); pushRemoteState(); }
+    if(syncUrl) requestPush();
   });
   document.getElementById('btnHolidays').addEventListener('click', function(){
     renderHolidayList();
@@ -1486,17 +1798,22 @@
     syncStatus = 'syncing'; syncStatusMessage = '연결 확인 중...'; renderSyncStatus();
     try{
       const remote = await fetchRemoteState();
-      if(remote.groups.length > 0){
+      remoteRev = remote.rev;
+      remoteUpdatedAt = remote.updatedAt;
+      syncBlocked = false;
+      if(remote.state.groups.length > 0){
         if(confirm('연결된 시트에 이미 데이터가 있습니다. 그 데이터를 불러와서 화면에 표시할까요?\n(취소하면 지금 화면 데이터를 유지합니다)')){
-          state = remote;
-          fullRender();
+          adoptRemote(remote.state, remote.rev, remote.updatedAt);
         }
       } else if(confirm('연결된 시트가 비어 있습니다. 지금 화면에 보이는 데이터를 시트에 저장할까요?')){
         await pushRemoteState();
       }
-      syncStatus = 'ok';
-      syncStatusMessage = '연결됨 · '+nowKST();
+      if(syncStatus !== 'error'){
+        syncStatus = 'ok';
+        syncStatusMessage = '연결됨 · '+nowKST();
+      }
     }catch(e){
+      syncBlocked = true;
       syncStatus = 'error';
       syncStatusMessage = '연결 실패: '+e.message;
     }
@@ -1504,8 +1821,7 @@
   });
   document.getElementById('syncNowBtn').addEventListener('click', function(){
     if(!syncUrl){ alert('먼저 동기화 URL을 등록하고 저장해주세요.'); return; }
-    clearTimeout(syncTimer);
-    pushRemoteState();
+    requestPush();
   });
   document.getElementById('syncUrlClearBtn').addEventListener('click', function(){
     if(confirm('구글 시트 연결을 해제할까요? 이후로는 이 브라우저에만 저장됩니다.')){
@@ -1528,9 +1844,9 @@
     const reader = new FileReader();
     reader.onload = function(ev){
       try{
-        const data = JSON.parse(ev.target.result);
-        if(!data || !Array.isArray(data.groups)) throw new Error('invalid');
-        state = data;
+        const clean = sanitizeState(JSON.parse(ev.target.result));
+        if(!clean) throw new Error('invalid');
+        state = clean;
         fullRender();
         alert('가져오기가 완료되었습니다.');
       }catch(err){
@@ -1539,6 +1855,12 @@
       e.target.value = '';
     };
     reader.readAsText(file);
+  });
+  // 표시 설정만 바꾸는 버튼이라 간트만 다시 그립니다. (저장·동기화 유발 안 함)
+  document.getElementById('btnGanttDoneToggle').addEventListener('click', function(){
+    ganttShowDone = !ganttShowDone;
+    saveGanttPref();
+    renderGantt();
   });
   document.getElementById('btnPrint').addEventListener('click', function(){ window.print(); });
   document.getElementById('btnClearAll').addEventListener('click', function(){
@@ -1555,21 +1877,30 @@
       syncStatus = 'syncing'; syncStatusMessage = '동기화 서버에서 불러오는 중...'; renderSyncStatus();
       try{
         const remote = await fetchRemoteState();
-        state = remote;
+        state = remote.state;
+        remoteRev = remote.rev;
+        remoteUpdatedAt = remote.updatedAt;
+        syncBlocked = false;
         syncStatus = 'ok';
         syncStatusMessage = '연결됨 · 마지막 불러오기 '+nowKST();
         return;
       }catch(e){
+        // 서버를 못 읽은 상태에서 로컬 데이터를 자동으로 올리면 팀 데이터가 날아갑니다.
+        syncBlocked = true;
         syncStatus = 'error';
-        syncStatusMessage = '동기화 서버에 연결하지 못해 이 브라우저의 로컬 데이터를 표시 중입니다 ('+e.message+')';
+        syncStatusMessage = '서버에서 불러오지 못해 이 브라우저의 로컬 데이터를 표시 중입니다. ' +
+          '팀 데이터를 보호하기 위해 자동 업로드를 중지했습니다 ('+e.message+')';
         console.warn('원격 데이터 불러오기 실패:', e);
       }
     }
     load();
   }
   loadHolidayStorage();
+  loadGanttPref();
   initState().then(function(){
-    fullRender();
+    // 방금 서버에서 받아온 내용을 그대로 되돌려 올리지 않도록 첫 렌더는 업로드를 막습니다.
+    suppressRemotePush = true;
+    try{ fullRender(); } finally { suppressRemotePush = false; }
     renderSyncStatus();
   });
 })();

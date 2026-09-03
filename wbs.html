@@ -14,7 +14,7 @@
     color-scheme: light;
     --font-sans: "Pretendard Variable", Pretendard, system-ui, -apple-system,
       "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
-    --bg:#f6f7f9; --panel:#ffffff; --border:#e4e7ec; --text:#2b3140; --sub:#6b7280;
+    --bg:#f6f7f9; --panel:#ffffff; --border:#e4e7ec; --text:#2b3140; --sub:#262626;
     --accent:#4c6fa3; --accent-dark:#3a5a8c; --group-bg:#eaf0f8; --group-text:#2e4a72;
     --group-text-muted: rgba(46,74,114,.55); --hover-tint: rgba(76,111,163,.06);
     --danger:#c1454b; --danger-bg:#fbe9ea;
@@ -299,12 +299,13 @@
   .gantt-week-th.current-week{color:var(--danger);}
   /* 구분별 색 — 타임라인 탭과 같은 값을 씁니다(JS의 CATEGORY_COLORS).
      기획·작성 노랑 / 검토 초록 / 수정 핑크 / 보고 파랑 / 그 외 회색 */
-  td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#efefef;}
-  td.gantt-cell[data-category="기획"]{background:#fbf3d6;}
-  td.gantt-cell[data-category="작성"]{background:#fadfcb;}
-  td.gantt-cell[data-category="수정"]{background:#e4d8fb;}
-  td.gantt-cell[data-category="검토"]{background:#d2efd2;}
-  td.gantt-cell[data-category="배포"]{background:#d2e7fc;}
+  td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#f2f2f2;}
+  td.gantt-cell[data-category="기획"]{background:#fff2cc;}
+  td.gantt-cell[data-category="작성"]{background:#fceabc;}
+  td.gantt-cell[data-category="수정"]{background:#fbe5d6;}
+  td.gantt-cell[data-category="검토"]{background:#dbf4d8;}
+  td.gantt-cell[data-category="보고"]{background:#c5e1ff;}
+  td.gantt-cell[data-category="배포"]{background:#e7daff;}
 
   /* Modal */
   .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50;}
@@ -1675,16 +1676,17 @@
   // 그룹을 가로 레인으로 두고, 상세 업무를 기간에 맞춰 막대로 배치합니다.
   // 색은 "구분"별로 자동 배정하고 아래 범례에 정리합니다.
   // 구분별 색. 간트차트 셀(css의 td.gantt-cell[data-category])과 같은 값입니다.
-  // 첨부 이미지의 파스텔 톤 기준. 간트차트 셀(css의 td.gantt-cell)과 같은 값입니다.
+  // 간트차트 셀(css의 td.gantt-cell[data-category])과 같은 값입니다.
   const CATEGORY_COLORS = {
-    '기획': '#fbf3d6',   // 크림
-    '작성': '#fadfcb',   // 살구
-    '수정': '#e4d8fb',   // 라벤더
-    '검토': '#d2efd2',   // 연두
-    '배포': '#d2e7fc'    // 하늘
+    '기획': '#fff2cc',   // 크림
+    '작성': '#fceabc',   // 노랑
+    '수정': '#fbe5d6',   // 살구
+    '검토': '#dbf4d8',   // 연두
+    '보고': '#c5e1ff',   // 하늘
+    '배포': '#e7daff'    // 라벤더
   };
-  // 이미지에 없는 구분(보고·테스트 등)은 모두 여기로 들어갑니다.
-  const CATEGORY_DEFAULT = '#efefef';
+  // 위에 없는 구분(테스트 등)은 모두 여기로 들어갑니다.
+  const CATEGORY_DEFAULT = '#f2f2f2';
   function categoryColor(cat){
     return Object.prototype.hasOwnProperty.call(CATEGORY_COLORS, cat) ? CATEGORY_COLORS[cat] : CATEGORY_DEFAULT;
   }
@@ -2059,7 +2061,7 @@
       '<title>WBS 일정 관리 (' + toISO(new Date()) + ')</title>'+
       '<link rel="stylesheet" href="'+PRETENDARD_CSS_URL+'"><style>'+
       'body{font-family:'+EXPORT_FONT_STACK+'; margin:24px; color:#2b3140; background:#fff;}'+
-      'h1{font-size:20px; margin:0 0 4px;} .meta{color:#6b7280; font-size:12px; margin-bottom:16px;}'+
+      'h1{font-size:20px; margin:0 0 4px;} .meta{color:#262626; font-size:12px; margin-bottom:16px;}'+
       'table{border-collapse:collapse; width:100%;} th,td{border:1px solid #e4e7ec; padding:6px 8px; font-size:13px; text-align:left;}'+
       'th{background:#f6f7f9;} tr.group-row{background:#eaf0f8; color:#2e4a72; font-weight:600;}'+
       '.status-pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px;}'+

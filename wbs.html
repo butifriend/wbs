@@ -72,6 +72,70 @@
     box-shadow:var(--shadow); padding:10px 12px; margin-bottom:12px;
     display:flex; flex-direction:column; gap:8px;
   }
+  .filter-pop-wrap{position:relative; flex:0 0 auto;}
+  .filter-toggle{
+    display:inline-flex; align-items:center; gap:4px; padding:4px 8px;
+    font-size:12px; border-radius:6px; line-height:1;
+  }
+  .filter-toggle svg{display:block;}
+  .filter-panel{
+    position:absolute; top:calc(100% + 6px); left:0; z-index:45;
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    box-shadow:var(--shadow); padding:10px; min-width:440px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .filter-panel.hidden{display:none;}
+  .filter-panel-row{display:flex; align-items:center; gap:8px;}
+
+  /* 화면 탭 */
+  .tabs{display:flex; gap:2px; margin-bottom:14px; border-bottom:1px solid var(--border);}
+  .tab-btn{
+    font:inherit; font-size:13px; font-weight:600; cursor:pointer;
+    padding:9px 18px; border:none; border-bottom:2px solid transparent;
+    background:transparent; color:var(--sub); border-radius:8px 8px 0 0;
+  }
+  .tab-btn:hover{color:var(--accent); background:var(--hover-tint);}
+  .tab-btn.active{color:var(--accent); border-bottom-color:var(--accent);}
+  .view.hidden{display:none;}
+
+  /* 타임라인 */
+  #timelineSection h2{font-size:16px; margin:0;}
+  .tl-group{border:1px solid var(--border); border-radius:10px; margin-bottom:10px; overflow:hidden;}
+  .tl-group:last-child{margin-bottom:0;}
+  .tl-group-head{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    background:var(--group-bg); color:var(--group-text);
+    padding:9px 12px; font-weight:700; font-size:13px;
+  }
+  .tl-no{min-width:16px; text-align:right; opacity:.7;}
+  .tl-cat{
+    font-size:11px; font-weight:600; padding:1px 7px; border-radius:999px;
+    background:var(--panel); color:var(--group-text);
+  }
+  .tl-title{flex:1 1 auto; min-width:0;}
+  .tl-meta{font-size:11.5px; font-weight:500; color:var(--group-text-muted); white-space:nowrap;}
+  .tl-items{padding:4px 12px 8px;}
+  .tl-item{
+    position:relative; display:flex; align-items:flex-start; gap:10px;
+    margin-left:5px; padding:8px 0 8px 16px; border-left:2px solid var(--border);
+  }
+  .tl-item:last-child{border-left-color:transparent;}
+  .tl-dot{
+    position:absolute; left:-6px; top:12px; width:10px; height:10px; border-radius:50%;
+    background:var(--st-plan); border:2px solid var(--panel);
+  }
+  .tl-dot[data-status=완료]{background:var(--st-done);}
+  .tl-dot[data-status=진행]{background:var(--st-progress);}
+  .tl-dot[data-status=보류]{background:var(--st-hold);}
+  .tl-dot[data-status=예정]{background:var(--st-plan);}
+  .tl-date{
+    flex:0 0 auto; min-width:120px; font-size:11.5px; line-height:1.5;
+    color:var(--sub); font-variant-numeric:tabular-nums;
+  }
+  .tl-body{flex:1 1 auto; min-width:0;}
+  .tl-detail{font-size:13px; font-weight:600;}
+  .tl-sub{font-size:11.5px; color:var(--sub); margin-top:2px;}
+  .tl-collapsed, .tl-empty{padding:10px 12px; font-size:12px; color:var(--sub);}
   .filter-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
   .filter-label{font-size:12px; font-weight:700; color:var(--sub); white-space:nowrap;}
   .filter-year{
@@ -238,7 +302,7 @@
 
   .info-box{font-size:12.5px; color:var(--sub); background:var(--bg); border:1px dashed var(--border); border-radius:8px; padding:10px 12px; line-height:1.6;}
   @media print{
-    .toolbar, #ganttSection, .no-print{display:none !important;}
+    .toolbar, .no-print{display:none !important;}
     body{background:#fff;}
     .panel{box-shadow:none; border:none;}
   }
@@ -288,15 +352,33 @@
   <div class="filter-bar no-print" id="filterBar">
     <div class="filter-head">
       <span class="filter-label">조회기간</span>
-      <select class="filter-year" id="filterYear"></select>
+      <div class="filter-pop-wrap">
+        <button class="filter-toggle" id="btnFilterToggle" title="조회기간 선택" aria-expanded="false">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="3" width="13" height="11" rx="1.5"/><line x1="1.5" y1="6.5" x2="14.5" y2="6.5"/><line x1="4.5" y1="1.5" x2="4.5" y2="4"/><line x1="11.5" y1="1.5" x2="11.5" y2="4"/></svg>
+          <span>선택</span>
+        </button>
+        <div class="filter-panel hidden" id="filterPanel">
+          <div class="filter-panel-row">
+            <span class="filter-label">기준 연도</span>
+            <select class="filter-year" id="filterYear"></select>
+          </div>
+          <div class="filter-chips" id="filterChips"></div>
+          <div class="filter-chips" id="filterMonths"></div>
+        </div>
+      </div>
       <span class="filter-info" id="filterInfo"></span>
       <span class="spacer"></span>
       <button class="small" id="btnGridDoneToggle" style="display:none;"></button>
     </div>
-    <div class="filter-chips" id="filterChips"></div>
-    <div class="filter-chips" id="filterMonths"></div>
   </div>
 
+  <div class="tabs no-print" id="viewTabs">
+    <button class="tab-btn" data-view="wbs">WBS</button>
+    <button class="tab-btn" data-view="gantt">간트차트</button>
+    <button class="tab-btn" data-view="timeline">타임라인</button>
+  </div>
+
+  <div class="view" id="view-wbs">
   <div class="panel" style="padding:0; overflow-x:auto;">
     <table id="wbsTable">
       <colgroup>
@@ -319,14 +401,26 @@
     대한민국 공휴일은 연도에 관계없이 자동으로 반영되며(대체공휴일 포함), 상단 <b>공휴일 관리</b>에서 직접 추가·삭제도 가능합니다.
     <div id="holidayWarn" class="weekend-warn" style="display:none; margin-top:8px;"></div>
   </div>
+  </div>
 
-  <div class="panel" id="ganttSection">
-    <div class="gantt-head">
-      <h2>일정 간트차트</h2>
-      <button class="small no-print" id="btnGanttDoneToggle" style="display:none;"></button>
+  <div class="view hidden" id="view-gantt">
+    <div class="panel" id="ganttSection">
+      <div class="gantt-head">
+        <h2>일정 간트차트</h2>
+        <button class="small no-print" id="btnGanttDoneToggle" style="display:none;"></button>
+      </div>
+      <div class="gantt-scroll">
+        <div class="gantt-inner" id="ganttInner"></div>
+      </div>
     </div>
-    <div class="gantt-scroll">
-      <div class="gantt-inner" id="ganttInner"></div>
+  </div>
+
+  <div class="view hidden" id="view-timeline">
+    <div class="panel" id="timelineSection">
+      <div class="gantt-head">
+        <h2>타임라인</h2>
+      </div>
+      <div id="timelineInner"></div>
     </div>
   </div>
 </div>
@@ -820,6 +914,9 @@
   /* ---------------- 화면 표시 설정 (데이터가 아니라 보기 설정이라 동기화하지 않습니다) ---------------- */
   const GRID_SHOW_DONE_KEY = 'wbs_grid_show_done_v1';
   const PERIOD_FILTER_KEY = 'wbs_period_filter_v1';
+  const ACTIVE_VIEW_KEY = 'wbs_active_view_v1';
+  const VIEWS = ['wbs', 'gantt', 'timeline'];
+  let activeView = 'wbs';
 
   let gridShowDone = false;
   // 전역 토글이 꺼진 상태에서 개별로 잠깐 펼쳐 둔 완료 그룹. 새로고침하면 초기화됩니다.
@@ -827,6 +924,10 @@
   let periodFilter = {mode:'all', year:new Date().getFullYear()};
 
   function loadViewPrefs(){
+    try{
+      const v = localStorage.getItem(ACTIVE_VIEW_KEY);
+      if(VIEWS.indexOf(v) !== -1) activeView = v;
+    }catch(e){}
     try{ gridShowDone = localStorage.getItem(GRID_SHOW_DONE_KEY) === '1'; }catch(e){}
     try{
       const raw = JSON.parse(localStorage.getItem(PERIOD_FILTER_KEY) || 'null');
@@ -839,6 +940,7 @@
     try{
       localStorage.setItem(GRID_SHOW_DONE_KEY, gridShowDone ? '1' : '0');
       localStorage.setItem(PERIOD_FILTER_KEY, JSON.stringify(periodFilter));
+      localStorage.setItem(ACTIVE_VIEW_KEY, activeView);
     }catch(e){}
   }
 
@@ -932,7 +1034,14 @@
     else if(key === 'lastYear') periodFilter = {mode:'year', year:now - 1};
     else periodFilter = {mode:key, year:periodFilter.year};
     saveViewPrefs();
+    closeFilterPanel();
     refreshViews();
+  }
+  function closeFilterPanel(){
+    const panel = document.getElementById('filterPanel');
+    const btn = document.getElementById('btnFilterToggle');
+    if(panel) panel.classList.add('hidden');
+    if(btn) btn.setAttribute('aria-expanded', 'false');
   }
 
   // 데이터에 등장하는 연도 + 올해 주변을 연도 선택 목록으로 씁니다.
@@ -1000,7 +1109,8 @@
     const btn = document.getElementById('btnGridDoneToggle');
     if(btn){
       const doneCount = state.groups.filter(isDoneGroup).length;
-      if(doneCount === 0){ btn.style.display = 'none'; }
+      // 간트 탭은 자체 토글이 있으므로 여기서는 감춥니다.
+      if(doneCount === 0 || activeView === 'gantt'){ btn.style.display = 'none'; }
       else {
         btn.style.display = '';
         btn.textContent = gridShowDone
@@ -1013,11 +1123,34 @@
     }
   }
 
+  function renderTabs(){
+    document.querySelectorAll('#viewTabs .tab-btn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-view') === activeView);
+    });
+    VIEWS.forEach(function(v){
+      const box = document.getElementById('view-' + v);
+      if(box) box.classList.toggle('hidden', v !== activeView);
+    });
+  }
+  // 보이는 탭만 그립니다. 나머지는 탭을 옮길 때 그려집니다.
+  function renderActiveView(){
+    if(activeView === 'gantt') renderGantt();
+    else if(activeView === 'timeline') renderTimeline();
+    else renderTable();
+  }
+  function setActiveView(v){
+    if(VIEWS.indexOf(v) === -1) return;
+    activeView = v;
+    saveViewPrefs();
+    renderTabs();
+    renderActiveView();
+    renderFilterBar();
+  }
+
   // 보기 설정만 바뀐 경우. 데이터를 저장하거나 동기화하지 않습니다.
   function refreshViews(){
-    renderTable();
+    renderActiveView();
     renderSummary();
-    renderGantt();
     renderFilterBar();
   }
 
@@ -1071,9 +1204,9 @@
   function fullRender(){
     rebuildHolidays();
     recalcAll();
-    renderTable();
+    renderTabs();
+    renderActiveView();
     renderSummary();
-    renderGantt();
     renderFilterBar();
     renderHolidayCoverage();
     save();
@@ -1081,10 +1214,11 @@
 
   // 텍스트 입력은 표를 다시 그리면 편집 중이던 칸의 포커스와 Tab 이동이 끊깁니다.
   // 그래서 칸을 벗어날 때 표는 그대로 두고 요약·간트만 다시 계산합니다.
+  // 텍스트 입력 후 칸을 벗어났을 때. 표를 다시 그리면 포커스·Tab 이동이 끊기므로
+  // 표는 건드리지 않습니다. 간트·타임라인은 탭을 옮길 때 새로 그려집니다.
   function refreshDerived(){
     recalcAll();
     renderSummary();
-    renderGantt();
     renderFilterBar();
     save();
   }
@@ -1510,6 +1644,63 @@
     });
     table.appendChild(tbody);
     container.appendChild(table);
+  }
+
+  /* ---------------- Timeline ---------------- */
+  // 그룹별로 상세 업무를 시작일 순서대로 늘어놓습니다. 조회기간·완료 접기는
+  // 표와 같은 규칙을 그대로 씁니다.
+  function renderTimeline(){
+    const box = document.getElementById('timelineInner');
+    if(!box) return;
+    box.innerHTML = '';
+    const view = visibleRows();
+    if(view.rows.length === 0){
+      box.appendChild(el('div', {class:'tl-empty'}, ['표시할 업무가 없습니다.']));
+      return;
+    }
+    view.rows.forEach(function(r, idx){
+      const g = r.g;
+      const head = el('div', {class:'tl-group-head'}, [
+        el('span', {class:'tl-no'}, [String(idx+1)]),
+        g.category ? el('span', {class:'tl-cat'}, [g.category]) : null,
+        el('span', {class:'tl-title'}, [g.title || '(제목없음)']),
+        el('span', {class:'status-pill', 'data-status': g._status || '예정'}, [g._status || '예정']),
+        el('span', {class:'tl-meta'}, [
+          (g._start ? fmtDisplay(g._start) : '-') + ' ~ ' + (g._end ? fmtDisplay(g._end) : '-') + ' · ' + (g._md || 0) + 'MD'
+        ])
+      ]);
+      const block = el('div', {class:'tl-group'}, [head]);
+
+      if(isGridCollapsed(g)){
+        block.appendChild(el('div', {class:'tl-collapsed'}, ['완료 ' + r.tasks.length + '건 접힘 — 위의 "완료 그룹 펼치기"로 볼 수 있습니다.']));
+      } else if(r.tasks.length === 0){
+        block.appendChild(el('div', {class:'tl-empty'}, ['등록된 상세업무가 없습니다.']));
+      } else {
+        const items = el('div', {class:'tl-items'});
+        r.tasks.slice().sort(function(a, b){
+          return String(a.t.start || '').localeCompare(String(b.t.start || ''));
+        }).forEach(function(item){
+          const t = item.t;
+          items.appendChild(el('div', {class:'tl-item'}, [
+            el('span', {class:'tl-dot', 'data-status': t.status || '예정'}),
+            el('div', {class:'tl-date'}, [
+              el('div', {}, [t.start ? fmtDisplay(t.start) : '-']),
+              el('div', {}, ['~ ' + (t.end ? fmtDisplay(t.end) : '-')])
+            ]),
+            el('div', {class:'tl-body'}, [
+              el('div', {class:'tl-detail'}, [t.detail || '(내용 없음)']),
+              el('div', {class:'tl-sub'}, [
+                (t.category ? t.category + ' · ' : '') +
+                (t.assignee || '담당 미지정') + ' · ' + (Number(t.md) || 0) + 'MD'
+              ])
+            ]),
+            el('span', {class:'status-pill', 'data-status': t.status || '예정'}, [t.status || '예정'])
+          ]));
+        });
+        block.appendChild(items);
+      }
+      box.appendChild(block);
+    });
   }
 
   /* ---------------- Holiday modal ---------------- */
@@ -2138,6 +2329,27 @@
     saveGanttPref();
     renderGantt();
   });
+  document.querySelectorAll('#viewTabs .tab-btn').forEach(function(b){
+    b.addEventListener('click', function(){ setActiveView(b.getAttribute('data-view')); });
+  });
+  (function(){
+    const toggle = document.getElementById('btnFilterToggle');
+    const panel = document.getElementById('filterPanel');
+    toggle.addEventListener('click', function(e){
+      e.stopPropagation();
+      const willOpen = panel.classList.contains('hidden');
+      panel.classList.toggle('hidden', !willOpen);
+      toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+    document.addEventListener('click', function(e){
+      if(panel.classList.contains('hidden')) return;
+      if(panel.contains(e.target) || toggle.contains(e.target)) return;
+      closeFilterPanel();
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key === 'Escape') closeFilterPanel();
+    });
+  })();
   document.getElementById('filterYear').addEventListener('change', function(e){
     const y = Number(e.target.value);
     if(!y) return;

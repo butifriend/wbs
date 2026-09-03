@@ -144,7 +144,7 @@
   .rm-gridline.w{opacity:.45;}
   .rm-gridline.q{background:var(--sub); opacity:.3;}
   /* 간트와 같은 옅은 색이라 얇으면 안 보여서 두께를 키우고 테두리를 둡니다. */
-  .rm-bar{position:absolute; height:14px; border-radius:4px; border:1px solid rgba(43,49,64,.18);}
+  .rm-bar{position:absolute; height:14px; border-radius:4px; border:1px solid rgba(43,49,64,.22);}
   .rm-label{
     position:absolute; font-size:11px; color:var(--text);
     white-space:nowrap; pointer-events:none; max-width:220px;
@@ -299,12 +299,12 @@
   .gantt-week-th.current-week{color:var(--danger);}
   /* 구분별 색 — 타임라인 탭과 같은 값을 씁니다(JS의 CATEGORY_COLORS).
      기획·작성 노랑 / 검토 초록 / 수정 핑크 / 보고 파랑 / 그 외 회색 */
-  td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#b8b8b8;}
-  td.gantt-cell[data-category="기획"]{background:#f2c94c;}
-  td.gantt-cell[data-category="작성"]{background:#f2c94c;}
-  td.gantt-cell[data-category="검토"]{background:#90ca5e;}
-  td.gantt-cell[data-category="수정"]{background:#eda15e;}
-  td.gantt-cell[data-category="보고"]{background:#559ee7;}
+  td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#efefef;}
+  td.gantt-cell[data-category="기획"]{background:#fbf3d6;}
+  td.gantt-cell[data-category="작성"]{background:#fadfcb;}
+  td.gantt-cell[data-category="수정"]{background:#e4d8fb;}
+  td.gantt-cell[data-category="검토"]{background:#d2efd2;}
+  td.gantt-cell[data-category="배포"]{background:#d2e7fc;}
 
   /* Modal */
   .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50;}
@@ -1675,16 +1675,16 @@
   // 그룹을 가로 레인으로 두고, 상세 업무를 기간에 맞춰 막대로 배치합니다.
   // 색은 "구분"별로 자동 배정하고 아래 범례에 정리합니다.
   // 구분별 색. 간트차트 셀(css의 td.gantt-cell[data-category])과 같은 값입니다.
-  // 기존 옅은 색의 색조(H)를 그대로 두고 채도만 올린 값입니다.
-  //   노랑 H45 / 초록 H92 / 살구 H28 / 파랑 H210
+  // 첨부 이미지의 파스텔 톤 기준. 간트차트 셀(css의 td.gantt-cell)과 같은 값입니다.
   const CATEGORY_COLORS = {
-    '기획': '#f2c94c',   // 노랑  H45  S54->86
-    '작성': '#f2c94c',   // 노랑  H45  S54->86
-    '검토': '#90ca5e',   // 초록  H92  S28->50
-    '수정': '#eda15e',   // 살구  H28  S46->80
-    '보고': '#559ee7'    // 파랑  H210 S32->75
+    '기획': '#fbf3d6',   // 크림
+    '작성': '#fadfcb',   // 살구
+    '수정': '#e4d8fb',   // 라벤더
+    '검토': '#d2efd2',   // 연두
+    '배포': '#d2e7fc'    // 하늘
   };
-  const CATEGORY_DEFAULT = '#b8b8b8';   // 그 외는 회색(무채색이라 명도만 낮춤)
+  // 이미지에 없는 구분(보고·테스트 등)은 모두 여기로 들어갑니다.
+  const CATEGORY_DEFAULT = '#efefef';
   function categoryColor(cat){
     return Object.prototype.hasOwnProperty.call(CATEGORY_COLORS, cat) ? CATEGORY_COLORS[cat] : CATEGORY_DEFAULT;
   }

@@ -98,44 +98,51 @@
   .tab-btn.active{color:var(--accent); border-bottom-color:var(--accent);}
   .view.hidden{display:none;}
 
-  /* 타임라인 */
+  /* 타임라인 (스윔레인 로드맵) */
   #timelineSection h2{font-size:16px; margin:0;}
-  .tl-group{border:1px solid var(--border); border-radius:10px; margin-bottom:10px; overflow:hidden;}
-  .tl-group:last-child{margin-bottom:0;}
-  .tl-group-head{
-    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-    background:var(--group-bg); color:var(--group-text);
-    padding:9px 12px; font-weight:700; font-size:13px;
+  .rm-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:8px;}
+  .rm{display:inline-block; min-width:100%;}
+  .rm-row{display:flex; align-items:stretch;}
+  .rm-head{border-bottom:1px solid var(--border);}
+  .rm-corner{
+    flex:0 0 var(--rm-name-w); position:sticky; left:0; z-index:3;
+    background:var(--bg); border-right:1px solid var(--border);
   }
-  .tl-no{min-width:16px; text-align:right; opacity:.7;}
-  .tl-cat{
-    font-size:11px; font-weight:600; padding:1px 7px; border-radius:999px;
-    background:var(--panel); color:var(--group-text);
+  .rm-axis{position:relative; flex:0 0 auto; height:30px; background:var(--bg);}
+  .rm-q{
+    position:absolute; top:4px; bottom:4px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:700; color:#fff; background:#9aa0a6;
+    border-radius:3px;
   }
-  .tl-title{flex:1 1 auto; min-width:0;}
-  .tl-meta{font-size:11.5px; font-weight:500; color:var(--group-text-muted); white-space:nowrap;}
-  .tl-items{padding:4px 12px 8px;}
-  .tl-item{
-    position:relative; display:flex; align-items:flex-start; gap:10px;
-    margin-left:5px; padding:8px 0 8px 16px; border-left:2px solid var(--border);
+  .rm-lane{border-bottom:1px solid var(--border);}
+  .rm-lane:last-child{border-bottom:none;}
+  .rm-name{
+    flex:0 0 var(--rm-name-w); position:sticky; left:0; z-index:2;
+    display:flex; flex-direction:column; justify-content:center; gap:3px;
+    padding:10px 12px; background:#6b7280; color:#fff;
+    border-right:1px solid var(--border); border-bottom:2px solid var(--panel);
   }
-  .tl-item:last-child{border-left-color:transparent;}
-  .tl-dot{
-    position:absolute; left:-6px; top:12px; width:10px; height:10px; border-radius:50%;
-    background:var(--st-plan); border:2px solid var(--panel);
+  .rm-name-title{font-size:13px; font-weight:700; line-height:1.35;}
+  .rm-name-sub{font-size:10.5px; opacity:.85; line-height:1.4;}
+  .rm-track{position:relative; flex:0 0 auto; background:var(--panel);}
+  .rm-gridline{position:absolute; top:0; bottom:0; width:1px; background:var(--border);}
+  .rm-gridline.q{background:var(--sub); opacity:.3;}
+  .rm-bar{position:absolute; height:10px; border-radius:5px;}
+  .rm-label{
+    position:absolute; font-size:11px; color:var(--text);
+    white-space:nowrap; pointer-events:none; max-width:220px;
+    overflow:hidden; text-overflow:ellipsis;
   }
-  .tl-dot[data-status=완료]{background:var(--st-done);}
-  .tl-dot[data-status=진행]{background:var(--st-progress);}
-  .tl-dot[data-status=보류]{background:var(--st-hold);}
-  .tl-dot[data-status=예정]{background:var(--st-plan);}
-  .tl-date{
-    flex:0 0 auto; min-width:120px; font-size:11.5px; line-height:1.5;
-    color:var(--sub); font-variant-numeric:tabular-nums;
+  .rm-ms{position:absolute; font-size:15px; line-height:1; color:#e8a33d; pointer-events:none;}
+  .rm-collapsed{
+    position:absolute; left:10px; top:9px;
+    font-size:11.5px; color:var(--sub);
   }
-  .tl-body{flex:1 1 auto; min-width:0;}
-  .tl-detail{font-size:13px; font-weight:600;}
-  .tl-sub{font-size:11.5px; color:var(--sub); margin-top:2px;}
-  .tl-collapsed, .tl-empty{padding:10px 12px; font-size:12px; color:var(--sub);}
+  .rm-empty{padding:16px; font-size:12.5px; color:var(--sub);}
+  .rm-legend{display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:10px; font-size:12px;}
+  .rm-legend-item{display:inline-flex; align-items:center; gap:6px; color:var(--sub);}
+  .rm-legend-swatch{width:14px; height:9px; border-radius:4px; flex:0 0 auto;}
   .filter-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
   .filter-label{font-size:12px; font-weight:700; color:var(--sub); white-space:nowrap;}
   .filter-year{
@@ -362,8 +369,10 @@
             <span class="filter-label">기준 연도</span>
             <select class="filter-year" id="filterYear"></select>
           </div>
-          <div class="filter-chips" id="filterChips"></div>
-          <div class="filter-chips" id="filterMonths"></div>
+          <div class="filter-chips" id="filterRow1"></div>
+          <div class="filter-chips" id="filterRow2"></div>
+          <div class="filter-chips" id="filterRow3"></div>
+          <div class="filter-chips" id="filterRow4"></div>
         </div>
       </div>
       <span class="filter-info" id="filterInfo"></span>
@@ -1008,6 +1017,7 @@
     return {rows:rows, hiddenGroups:hiddenGroups, hiddenTasks:hiddenTasks, range:range};
   }
 
+  // 앞 5개가 1줄, 나머지 4개(분기)가 2줄에 들어갑니다.
   const PERIOD_CHIPS = [
     {key:'all',      label:'전체'},
     {key:'thisYear', label:'올해'},
@@ -1072,28 +1082,24 @@
       yearSel.disabled = periodFilter.mode === 'all';
     }
 
-    const chips = document.getElementById('filterChips');
-    if(chips){
-      chips.innerHTML = '';
-      PERIOD_CHIPS.forEach(function(c){
-        chips.appendChild(el('button', {
-          class: 'chip-btn' + (chipIsActive(c.key) ? ' active' : ''),
-          onclick: function(){ applyChip(c.key); }
-        }, [c.label]));
+    // 줄바꿈을 flex-wrap에 맡기지 않고 4줄로 고정 배치합니다.
+    function fillRow(id, items){
+      const box = document.getElementById(id);
+      if(!box) return;
+      box.innerHTML = '';
+      items.forEach(function(it){
+        box.appendChild(el('button', {
+          class: 'chip-btn' + (chipIsActive(it.key) ? ' active' : ''),
+          onclick: (function(k){ return function(){ applyChip(k); }; })(it.key)
+        }, [it.label]));
       });
     }
-
-    const months = document.getElementById('filterMonths');
-    if(months){
-      months.innerHTML = '';
-      for(let m = 1; m <= 12; m++){
-        const key = 'm' + m;
-        months.appendChild(el('button', {
-          class: 'chip-btn' + (chipIsActive(key) ? ' active' : ''),
-          onclick: (function(k){ return function(){ applyChip(k); }; })(key)
-        }, [m + '월']));
-      }
-    }
+    const months = [];
+    for(let m = 1; m <= 12; m++) months.push({key:'m' + m, label:m + '월'});
+    fillRow('filterRow1', PERIOD_CHIPS.slice(0, 5));   // 전체·올해·전년도·상반기·하반기
+    fillRow('filterRow2', PERIOD_CHIPS.slice(5));      // 1~4분기
+    fillRow('filterRow3', months.slice(0, 6));         // 1~6월
+    fillRow('filterRow4', months.slice(6));            // 7~12월
 
     const info = document.getElementById('filterInfo');
     if(info){
@@ -1624,9 +1630,9 @@
       gtr.appendChild(groupTitleTd);
       tbody.appendChild(gtr);
 
-      // 완료 그룹은 간트 전용 토글이 표의 접기 상태보다 우선합니다.
-      // (표에서 접어둔 완료 그룹이 "펼치기"에 반응하지 않던 문제)
-      if(isDoneGroup(g) ? ganttDoneCollapsed : g.collapsed) return;
+      // 간트 탭은 WBS 표의 접기 상태(g.collapsed)와 무관하게 동작합니다.
+      // 진행 중인 그룹은 항상 펼쳐 두고, 완료 그룹만 간트 자체 토글로 접습니다.
+      if(ganttDoneCollapsed) return;
       r.tasks.forEach(function(item, ti){
         const t = item.t;
         const ttr = el('tr', {class:'gantt-row-task'});
@@ -1646,61 +1652,194 @@
     container.appendChild(table);
   }
 
-  /* ---------------- Timeline ---------------- */
-  // 그룹별로 상세 업무를 시작일 순서대로 늘어놓습니다. 조회기간·완료 접기는
-  // 표와 같은 규칙을 그대로 씁니다.
+  /* ---------------- Timeline (스윔레인 로드맵) ---------------- */
+  // 그룹을 가로 레인으로 두고, 상세 업무를 기간에 맞춰 막대로 배치합니다.
+  // 색은 "구분"별로 자동 배정하고 아래 범례에 정리합니다.
+  const ROADMAP_PALETTE = [
+    '#e8453c', '#2f80ed', '#f2c94c', '#27ae60', '#9aa0a6',
+    '#8e44ad', '#e67e22', '#16a085', '#c2185b', '#0097a7'
+  ];
+  const RM_NAME_W = 150;   // 좌측 그룹 이름 칸 너비(px)
+  const RM_ROW_H = 34;     // 레인 안에서 막대 한 줄 높이(px)
+  const RM_LABEL_W = 96;   // 막대 위 라벨이 차지한다고 보는 최소 너비(px)
+
   function renderTimeline(){
     const box = document.getElementById('timelineInner');
     if(!box) return;
     box.innerHTML = '';
     const view = visibleRows();
-    if(view.rows.length === 0){
-      box.appendChild(el('div', {class:'tl-empty'}, ['표시할 업무가 없습니다.']));
+
+    // 막대를 놓을 전체 기간을 먼저 구합니다.
+    let minStr = '', maxStr = '';
+    view.rows.forEach(function(r){
+      r.tasks.forEach(function(item){
+        const s = item.t.start || item.t.end;
+        const e = item.t.end || item.t.start;
+        if(s && (!minStr || s < minStr)) minStr = s;
+        if(e && (!maxStr || e > maxStr)) maxStr = e;
+      });
+    });
+    if(!minStr || !maxStr){
+      box.appendChild(el('div', {class:'rm-empty'}, ['표시할 일정이 없습니다.']));
       return;
     }
-    view.rows.forEach(function(r, idx){
-      const g = r.g;
-      const head = el('div', {class:'tl-group-head'}, [
-        el('span', {class:'tl-no'}, [String(idx+1)]),
-        g.category ? el('span', {class:'tl-cat'}, [g.category]) : null,
-        el('span', {class:'tl-title'}, [g.title || '(제목없음)']),
-        el('span', {class:'status-pill', 'data-status': g._status || '예정'}, [g._status || '예정']),
-        el('span', {class:'tl-meta'}, [
-          (g._start ? fmtDisplay(g._start) : '-') + ' ~ ' + (g._end ? fmtDisplay(g._end) : '-') + ' · ' + (g._md || 0) + 'MD'
-        ])
-      ]);
-      const block = el('div', {class:'tl-group'}, [head]);
 
-      if(isGridCollapsed(g)){
-        block.appendChild(el('div', {class:'tl-collapsed'}, ['완료 ' + r.tasks.length + '건 접힘 — 위의 "완료 그룹 펼치기"로 볼 수 있습니다.']));
-      } else if(r.tasks.length === 0){
-        block.appendChild(el('div', {class:'tl-empty'}, ['등록된 상세업무가 없습니다.']));
-      } else {
-        const items = el('div', {class:'tl-items'});
+    // 축이 달 경계에서 딱 떨어지도록 앞뒤를 그 달의 처음·끝까지 넓힙니다.
+    const minD = parseISO(minStr), maxD = parseISO(maxStr);
+    const from = new Date(minD.getFullYear(), minD.getMonth(), 1);
+    const to = new Date(maxD.getFullYear(), maxD.getMonth() + 1, 0);
+    const DAY = 86400000;
+    const totalDays = Math.round((to - from) / DAY) + 1;
+    const monthCount = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()) + 1;
+    const trackW = Math.max(860, monthCount * 96);
+    const pxPerDay = trackW / totalDays;
+    function xOf(d){ return Math.round((d - from) / DAY * pxPerDay); }
+
+    // 구분별 색을 등장 순서대로 고정 배정합니다.
+    const colorMap = {};
+    let colorIdx = 0;
+    function colorOf(cat){
+      const key = cat || '기타';
+      if(!Object.prototype.hasOwnProperty.call(colorMap, key)){
+        colorMap[key] = ROADMAP_PALETTE[colorIdx % ROADMAP_PALETTE.length];
+        colorIdx++;
+      }
+      return colorMap[key];
+    }
+    view.rows.forEach(function(r){
+      r.tasks.forEach(function(item){ colorOf(item.t.category); });
+    });
+
+    const rm = el('div', {class:'rm', style:'--rm-name-w:' + RM_NAME_W + 'px;'});
+
+    // 분기 헤더
+    const axis = el('div', {class:'rm-axis', style:'width:' + trackW + 'px;'});
+    let qy = from.getFullYear(), qi = Math.floor(from.getMonth() / 3);
+    const quarterStarts = [];
+    while(true){
+      const qs = new Date(qy, qi * 3, 1);
+      const qe = new Date(qy, qi * 3 + 3, 0);
+      if(qs > to) break;
+      const s = qs < from ? from : qs;
+      const e = qe > to ? to : qe;
+      const x = xOf(s), w = xOf(e) - x + Math.round(pxPerDay);
+      axis.appendChild(el('div', {
+        class:'rm-q',
+        style:'left:' + (x + 2) + 'px; width:' + Math.max(0, w - 4) + 'px;'
+      }, ['Q' + (qi + 1) + ' ' + qy]));
+      if(qs > from) quarterStarts.push(xOf(qs));
+      qi++; if(qi > 3){ qi = 0; qy++; }
+    }
+    rm.appendChild(el('div', {class:'rm-row rm-head'}, [el('div', {class:'rm-corner'}), axis]));
+
+    // 달 경계 세로선 (분기 경계는 진하게)
+    function gridLines(){
+      const lines = [];
+      const cur = new Date(from.getFullYear(), from.getMonth() + 1, 1);
+      while(cur <= to){
+        const x = xOf(cur);
+        lines.push(el('div', {
+          class:'rm-gridline' + (quarterStarts.indexOf(x) !== -1 ? ' q' : ''),
+          style:'left:' + x + 'px;'
+        }));
+        cur.setMonth(cur.getMonth() + 1);
+      }
+      return lines;
+    }
+
+    view.rows.forEach(function(r){
+      const g = r.g;
+      // 타임라인도 간트와 같이 WBS 표의 접기 상태와 무관합니다.
+      // 완료 그룹만 상단 "완료 그룹 펼치기" 토글로 접습니다.
+      const collapsed = isDoneGroup(g) && !gridShowDone;
+
+      // 겹치지 않도록 막대를 여러 줄로 나눠 담습니다. 막대 위 라벨 자리도 함께 확보합니다.
+      const rowEnds = [];
+      const bars = [];
+      if(!collapsed){
         r.tasks.slice().sort(function(a, b){
           return String(a.t.start || '').localeCompare(String(b.t.start || ''));
         }).forEach(function(item){
           const t = item.t;
-          items.appendChild(el('div', {class:'tl-item'}, [
-            el('span', {class:'tl-dot', 'data-status': t.status || '예정'}),
-            el('div', {class:'tl-date'}, [
-              el('div', {}, [t.start ? fmtDisplay(t.start) : '-']),
-              el('div', {}, ['~ ' + (t.end ? fmtDisplay(t.end) : '-')])
-            ]),
-            el('div', {class:'tl-body'}, [
-              el('div', {class:'tl-detail'}, [t.detail || '(내용 없음)']),
-              el('div', {class:'tl-sub'}, [
-                (t.category ? t.category + ' · ' : '') +
-                (t.assignee || '담당 미지정') + ' · ' + (Number(t.md) || 0) + 'MD'
-              ])
-            ]),
-            el('span', {class:'status-pill', 'data-status': t.status || '예정'}, [t.status || '예정'])
-          ]));
+          const s = t.start || t.end;
+          const e = t.end || t.start;
+          if(!s || !parseISO(s)) return;
+          const x = xOf(parseISO(s));
+          const endD = parseISO(e) || parseISO(s);
+          const w = Math.max(8, xOf(endD) - x + Math.round(pxPerDay));
+          let row = 0;
+          while(row < rowEnds.length && rowEnds[row] > x - 8) row++;
+          rowEnds[row] = x + Math.max(w, RM_LABEL_W);
+          bars.push({t:t, x:x, w:w, row:row, milestone:(Number(t.md) || 0) === 0});
         });
-        block.appendChild(items);
       }
-      box.appendChild(block);
+      const laneRows = Math.max(1, rowEnds.length);
+      const laneH = laneRows * RM_ROW_H + 8;
+
+      const name = el('div', {class:'rm-name', style:'min-height:' + laneH + 'px;'}, [
+        el('div', {class:'rm-name-title'}, [g.title || '(제목없음)']),
+        el('div', {class:'rm-name-sub'}, [
+          (g.category ? g.category + ' · ' : '') + (g._md || 0) + 'MD · ' + (g._status || '예정')
+        ])
+      ]);
+
+      const track = el('div', {class:'rm-track', style:'width:' + trackW + 'px; height:' + laneH + 'px;'});
+      gridLines().forEach(function(l){ track.appendChild(l); });
+
+      if(collapsed){
+        track.appendChild(el('div', {class:'rm-collapsed'}, ['완료 ' + r.tasks.length + '건 접힘 — 위의 "완료 그룹 펼치기"로 볼 수 있습니다.']));
+      } else if(bars.length === 0){
+        track.appendChild(el('div', {class:'rm-collapsed'}, ['표시할 업무가 없습니다.']));
+      }
+
+      bars.forEach(function(b){
+        const top = b.row * RM_ROW_H + 22;
+        const tip = (b.t.category ? b.t.category + ' · ' : '') + (b.t.detail || '') +
+          ' (' + fmtDisplay(b.t.start) + ' ~ ' + fmtDisplay(b.t.end) + ', ' +
+          (Number(b.t.md) || 0) + 'MD, ' + (b.t.assignee || '담당 미지정') + ')';
+        track.appendChild(el('div', {
+          class:'rm-label',
+          style:'left:' + b.x + 'px; top:' + (b.row * RM_ROW_H + 5) + 'px;',
+          title: tip
+        }, [b.t.detail || '(내용 없음)']));
+        if(b.milestone){
+          // M/D 0은 마일스톤이라 막대 대신 별표로 찍습니다.
+          track.appendChild(el('div', {
+            class:'rm-ms',
+            style:'left:' + (b.x - 4) + 'px; top:' + (top - 3) + 'px;',
+            title: tip
+          }, ['★']));
+        } else {
+          track.appendChild(el('div', {
+            class:'rm-bar',
+            style:'left:' + b.x + 'px; width:' + b.w + 'px; top:' + top + 'px; background:' + colorOf(b.t.category) + ';',
+            title: tip
+          }));
+        }
+      });
+
+      rm.appendChild(el('div', {class:'rm-row rm-lane'}, [name, track]));
     });
+
+    if(view.rows.length === 0){
+      box.appendChild(el('div', {class:'rm-empty'}, ['표시할 업무가 없습니다.']));
+      return;
+    }
+
+    box.appendChild(el('div', {class:'rm-scroll'}, [rm]));
+
+    const legend = el('div', {class:'rm-legend'});
+    Object.keys(colorMap).forEach(function(k){
+      legend.appendChild(el('span', {class:'rm-legend-item'}, [
+        el('span', {class:'rm-legend-swatch', style:'background:' + colorMap[k] + ';'}),
+        k
+      ]));
+    });
+    legend.appendChild(el('span', {class:'rm-legend-item'}, [
+      el('span', {style:'color:#e8a33d; font-size:14px; line-height:1;'}, ['★']),
+      'M/D 0 (마일스톤)'
+    ]));
+    box.appendChild(legend);
   }
 
   /* ---------------- Holiday modal ---------------- */

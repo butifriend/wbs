@@ -118,9 +118,14 @@
   .rm-q{
     position:absolute; top:3px; bottom:3px;
     display:flex; align-items:center; justify-content:center;
-    font-size:12px; font-weight:700; color:#fff; background:#9aa0a6;
+    font-size:12px; font-weight:700; color:#262626; background:#c5e1ff;
     border-radius:3px;
   }
+  /* 분기별 색 (배경이 밝아 글자는 어둡게 둡니다) */
+  .rm-q[data-q="1"]{background:#c5e1ff;}
+  .rm-q[data-q="2"]{background:#9eceff;}
+  .rm-q[data-q="3"]{background:#7eb4ff;}
+  .rm-q[data-q="4"]{background:#d0b5ff;}
   .rm-m, .rm-w{
     position:absolute; top:0; bottom:0; overflow:hidden;
     display:flex; align-items:center; justify-content:center;
@@ -245,8 +250,27 @@
   .cell-inner input{flex:1 1 auto; min-width:0;}
   .cell-inner input[type=date]{flex:0 0 auto; width:auto; padding:5px 0;}
   input[type=date]::-webkit-calendar-picker-indicator{display:none; -webkit-appearance:none;}
-  .date-pick-btn{border:none; background:none; cursor:pointer; color:var(--sub); padding:2px; display:inline-flex; flex:0 0 auto; line-height:1;}
-  .date-pick-btn:hover{color:var(--accent);}
+  /* 달력 열기 버튼 — 눌리는 물리 버튼처럼 보이게 위쪽 하이라이트 + 아래 그림자 */
+  .date-pick-btn{
+    cursor:pointer; flex:0 0 auto; line-height:1; padding:0;
+    display:inline-flex; align-items:center; justify-content:center;
+    width:22px; height:22px; color:var(--sub);
+    border:1px solid #c6cbd4; border-radius:5px;
+    background:linear-gradient(#ffffff, #eceff4);
+    box-shadow:0 1px 2px rgba(43,49,64,.18), inset 0 1px 0 rgba(255,255,255,.9);
+    transition:background .12s, box-shadow .12s, color .12s, border-color .12s;
+  }
+  .date-pick-btn:hover{
+    color:var(--accent); border-color:var(--accent);
+    background:linear-gradient(#ffffff, #e5ecf6);
+    box-shadow:0 2px 4px rgba(43,49,64,.2), inset 0 1px 0 rgba(255,255,255,.9);
+  }
+  .date-pick-btn:active{
+    color:var(--accent-dark);
+    background:linear-gradient(#dfe3ea, #f2f4f8);
+    box-shadow:inset 0 2px 3px rgba(43,49,64,.28);
+    transform:translateY(1px);
+  }
   .badge-auto{font-size:10px; padding:2px 5px; border-radius:5px; background:var(--st-done-bg); color:var(--st-done); white-space:nowrap; flex:0 0 auto;}
   .badge-manual{font-size:10px; padding:2px 5px; border-radius:5px; background:var(--st-hold-bg); color:var(--st-hold); white-space:nowrap; flex:0 0 auto;}
   .reset-btn{border:none; background:none; cursor:pointer; color:var(--sub); font-size:13px; padding:2px 4px; flex:0 0 auto;}
@@ -1801,17 +1825,19 @@
     });
 
     // 월·분기는 주 칸을 묶어서 만듭니다.
-    function groupCols(keyOf, labelOf, rowEl, startsArr, cls, inset){
+    function groupCols(keyOf, labelOf, rowEl, startsArr, cls, inset, attrsOf){
       let i = 0;
       while(i < weekCols.length){
         const key = keyOf(weekCols[i]);
         let j = i;
         while(j < weekCols.length && keyOf(weekCols[j]) === key) j++;
         const x = i * RM_WEEK_W, w = (j - i) * RM_WEEK_W;
-        rowEl.appendChild(el('div', {
+        const props = {
           class: cls,
           style: 'left:' + (x + inset) + 'px; width:' + Math.max(0, w - inset * 2) + 'px;'
-        }, [labelOf(weekCols[i])]));
+        };
+        if(attrsOf) Object.assign(props, attrsOf(weekCols[i]));
+        rowEl.appendChild(el('div', props, [labelOf(weekCols[i])]));
         if(i > 0) startsArr.push(x);
         i = j;
       }
@@ -1824,7 +1850,8 @@
     groupCols(
       function(c){ return c.year + '-Q' + Math.floor(c.month / 3); },
       function(c){ return 'Q' + (Math.floor(c.month / 3) + 1) + ' ' + c.year; },
-      qRow, quarterStarts, 'rm-q', 2
+      qRow, quarterStarts, 'rm-q', 2,
+      function(c){ return {'data-q': String(Math.floor(c.month / 3) + 1)}; }
     );
 
     const axis = el('div', {class:'rm-axis', style:'width:' + trackW + 'px;'}, [qRow, mRow, wRow]);

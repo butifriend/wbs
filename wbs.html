@@ -18,10 +18,12 @@
     --accent:#4c6fa3; --accent-dark:#3a5a8c; --group-bg:#eaf0f8; --group-text:#2e4a72;
     --group-text-muted: rgba(46,74,114,.55); --hover-tint: rgba(76,111,163,.06);
     --danger:#c1454b; --danger-bg:#fbe9ea;
-    --st-done:#3e5e85; --st-done-bg:#e6edf6;
-    --st-progress:#4c7a50; --st-progress-bg:#e7f0e7;
-    --st-hold:#c1454b; --st-hold-bg:#fbe9ea;
-    --st-plan:#6b7280; --st-plan-bg:#eef0f3;
+    /* -mid 는 도형색(-bg)과 글자색의 중간 톤입니다. 글자색의 색조를 유지하고
+       명도만 올려서(38->66 등) 탁해지지 않게 잡았습니다. 진행 현황 바에 씁니다. */
+    --st-done:#3e5e85; --st-done-bg:#e6edf6; --st-done-mid:#86a5cb;
+    --st-progress:#4c7a50; --st-progress-bg:#e7f0e7; --st-progress-mid:#7fbd84;
+    --st-hold:#c1454b; --st-hold-bg:#fbe9ea; --st-hold-mid:#dd7e83;
+    --st-plan:#6b7280; --st-plan-bg:#eef0f3; --st-plan-mid:#a4aab7;
     --shadow: 0 1px 3px rgba(43,49,64,.06), 0 1px 2px rgba(43,49,64,.05);
   }
   *{box-sizing:border-box;}
@@ -207,21 +209,16 @@
     background:var(--border); margin:10px 0 9px;
   }
   .progress-seg{height:100%;}
-  /* 막대는 WBS 그리드 상태 도형(.status-pill)의 배경색을 그대로 씁니다.
-     범례 점은 아래 .seg-* 의 진한 글자색을 계속 써서 구분이 남습니다. */
-  .progress-seg.seg-done{background:var(--st-done-bg);}
-  .progress-seg.seg-progress{background:var(--st-progress-bg);}
-  .progress-seg.seg-hold{background:var(--st-hold-bg);}
-  .progress-seg.seg-plan{background:var(--st-plan-bg);}
-  /* 색이 옅어 서로 붙어 보이므로 구간 사이에 얇은 경계를 둡니다. */
+  /* 구간 사이 얇은 경계 */
   .progress-seg + .progress-seg{box-shadow:inset 1px 0 0 var(--panel);}
   .stat-legend{display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px;}
   .legend-item{display:inline-flex; align-items:center; gap:5px; color:var(--sub); white-space:nowrap;}
   .legend-dot{width:8px; height:8px; border-radius:50%; flex:0 0 auto;}
-  .seg-done{background:var(--st-done);}
-  .seg-progress{background:var(--st-progress);}
-  .seg-hold{background:var(--st-hold);}
-  .seg-plan{background:var(--st-plan);}
+  /* 진행 현황 바와 그 아래 범례 점이 같은 중간 톤을 씁니다. */
+  .seg-done{background:var(--st-done-mid);}
+  .seg-progress{background:var(--st-progress-mid);}
+  .seg-hold{background:var(--st-hold-mid);}
+  .seg-plan{background:var(--st-plan-mid);}
 
   table{width:100%; min-width:1340px; border-collapse:collapse; table-layout:fixed;}
   col.c-no{width:56px;} col.c-cat{width:90px;} col.c-detail{width:auto;}

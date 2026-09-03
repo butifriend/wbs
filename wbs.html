@@ -66,6 +66,31 @@
   .menu-panel button.danger{color:var(--danger);}
   .menu-panel button.danger:hover{background:var(--danger-bg); color:var(--danger);}
 
+  /* 조회기간 필터 바 */
+  .filter-bar{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow); padding:10px 12px; margin-bottom:12px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .filter-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .filter-label{font-size:12px; font-weight:700; color:var(--sub); white-space:nowrap;}
+  .filter-year{
+    width:auto; flex:0 0 auto; padding:4px 8px; font-size:12px;
+    border:1px solid var(--border); border-radius:6px; background:var(--panel); color:var(--text);
+  }
+  .filter-info{font-size:12px; color:var(--sub);}
+  .filter-chips{display:flex; flex-wrap:wrap; gap:4px;}
+  .chip-btn{
+    font:inherit; font-size:12px; cursor:pointer; white-space:nowrap;
+    padding:4px 10px; border-radius:6px;
+    border:1px solid var(--border); background:var(--panel); color:var(--text);
+  }
+  .chip-btn:hover{border-color:var(--accent); color:var(--accent);}
+  .chip-btn.active{
+    border-color:var(--accent); color:var(--accent);
+    background:var(--st-done-bg); font-weight:700;
+  }
+
   /* 요약 카드 */
   .summary{display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px;}
   .stat-card{
@@ -259,6 +284,18 @@
   </div>
 
   <div class="summary no-print" id="summaryBar"></div>
+
+  <div class="filter-bar no-print" id="filterBar">
+    <div class="filter-head">
+      <span class="filter-label">조회기간</span>
+      <select class="filter-year" id="filterYear"></select>
+      <span class="filter-info" id="filterInfo"></span>
+      <span class="spacer"></span>
+      <button class="small" id="btnGridDoneToggle" style="display:none;"></button>
+    </div>
+    <div class="filter-chips" id="filterChips"></div>
+    <div class="filter-chips" id="filterMonths"></div>
+  </div>
 
   <div class="panel" style="padding:0; overflow-x:auto;">
     <table id="wbsTable">
@@ -780,6 +817,210 @@
     seedData();
   }
 
+  /* ---------------- 화면 표시 설정 (데이터가 아니라 보기 설정이라 동기화하지 않습니다) ---------------- */
+  const GRID_SHOW_DONE_KEY = 'wbs_grid_show_done_v1';
+  const PERIOD_FILTER_KEY = 'wbs_period_filter_v1';
+
+  let gridShowDone = false;
+  // 전역 토글이 꺼진 상태에서 개별로 잠깐 펼쳐 둔 완료 그룹. 새로고침하면 초기화됩니다.
+  const doneOverride = new Set();
+  let periodFilter = {mode:'all', year:new Date().getFullYear()};
+
+  function loadViewPrefs(){
+    try{ gridShowDone = localStorage.getItem(GRID_SHOW_DONE_KEY) === '1'; }catch(e){}
+    try{
+      const raw = JSON.parse(localStorage.getItem(PERIOD_FILTER_KEY) || 'null');
+      if(raw && typeof raw.mode === 'string' && Number(raw.year)){
+        periodFilter = {mode:raw.mode, year:Number(raw.year)};
+      }
+    }catch(e){}
+  }
+  function saveViewPrefs(){
+    try{
+      localStorage.setItem(GRID_SHOW_DONE_KEY, gridShowDone ? '1' : '0');
+      localStorage.setItem(PERIOD_FILTER_KEY, JSON.stringify(periodFilter));
+    }catch(e){}
+  }
+
+  function isDoneGroup(g){ return g._status === '완료' && g.tasks.length > 0; }
+
+  // 완료 그룹은 상단 전역 토글이 우선하고, 그 외에는 표의 개별 접기 상태를 따릅니다.
+  function isGridCollapsed(g){
+    if(isDoneGroup(g)) return !(gridShowDone || doneOverride.has(g.id));
+    return !!g.collapsed;
+  }
+
+  // 선택한 조회기간의 [시작, 끝]. 'all'이면 null.
+  function periodRange(){
+    const y = periodFilter.year;
+    if(periodFilter.mode === 'all') return null;
+    function span(m0, m1){
+      return {from: toISO(new Date(y, m0, 1)), to: toISO(new Date(y, m1+1, 0))};
+    }
+    if(periodFilter.mode === 'year') return span(0, 11);
+    if(periodFilter.mode === 'h1') return span(0, 5);
+    if(periodFilter.mode === 'h2') return span(6, 11);
+    const q = /^q([1-4])$/.exec(periodFilter.mode);
+    if(q){ const i = (Number(q[1]) - 1) * 3; return span(i, i + 2); }
+    const m = /^m(\d{1,2})$/.exec(periodFilter.mode);
+    if(m){ const i = Number(m[1]) - 1; if(i>=0 && i<=11) return span(i, i); }
+    return null;
+  }
+  function periodLabel(){
+    const r = periodRange();
+    return r ? fmtDisplay(r.from) + ' ~ ' + fmtDisplay(r.to) : '전체 기간';
+  }
+
+  // 업무 기간이 조회기간과 조금이라도 겹치면 보여 줍니다.
+  // 날짜가 비어 있는 업무는 걸러내지 않습니다(입력 중일 수 있어서).
+  function taskInPeriod(t, range){
+    if(!range) return true;
+    const s = t.start || t.end;
+    const e = t.end || t.start;
+    if(!s || !e) return true;
+    return s <= range.to && e >= range.from;
+  }
+
+  // 화면에 그릴 순서와 범위를 계산합니다. state.groups는 절대 바꾸지 않고,
+  // 원래 위치(dataIndex)와 원래 업무 번호(taskIndex)를 함께 넘겨
+  // 드래그 재정렬·삭제가 정확한 대상을 가리키게 합니다.
+  function visibleRows(){
+    const range = periodRange();
+    const all = state.groups.map(function(g, i){ return {g:g, dataIndex:i}; });
+    // 완료된 그룹은 화면에서만 맨 아래로 내립니다.
+    const ordered = all.filter(function(r){ return !isDoneGroup(r.g); })
+      .concat(all.filter(function(r){ return isDoneGroup(r.g); }));
+
+    let hiddenGroups = 0, hiddenTasks = 0;
+    const rows = [];
+    ordered.forEach(function(r){
+      const tasks = [];
+      r.g.tasks.forEach(function(t, ti){
+        if(taskInPeriod(t, range)) tasks.push({t:t, taskIndex:ti});
+        else hiddenTasks++;
+      });
+      // 업무가 있는 그룹인데 조회기간에 하나도 안 걸리면 그룹째 숨깁니다.
+      if(range && r.g.tasks.length > 0 && tasks.length === 0){ hiddenGroups++; return; }
+      rows.push({g:r.g, dataIndex:r.dataIndex, tasks:tasks});
+    });
+    return {rows:rows, hiddenGroups:hiddenGroups, hiddenTasks:hiddenTasks, range:range};
+  }
+
+  const PERIOD_CHIPS = [
+    {key:'all',      label:'전체'},
+    {key:'thisYear', label:'올해'},
+    {key:'lastYear', label:'전년도'},
+    {key:'h1',       label:'상반기'},
+    {key:'h2',       label:'하반기'},
+    {key:'q1',       label:'1분기'},
+    {key:'q2',       label:'2분기'},
+    {key:'q3',       label:'3분기'},
+    {key:'q4',       label:'4분기'}
+  ];
+
+  function chipIsActive(key){
+    const now = new Date().getFullYear();
+    if(key === 'all') return periodFilter.mode === 'all';
+    if(key === 'thisYear') return periodFilter.mode === 'year' && periodFilter.year === now;
+    if(key === 'lastYear') return periodFilter.mode === 'year' && periodFilter.year === now - 1;
+    return periodFilter.mode === key;
+  }
+  function applyChip(key){
+    const now = new Date().getFullYear();
+    if(key === 'all') periodFilter = {mode:'all', year:periodFilter.year};
+    else if(key === 'thisYear') periodFilter = {mode:'year', year:now};
+    else if(key === 'lastYear') periodFilter = {mode:'year', year:now - 1};
+    else periodFilter = {mode:key, year:periodFilter.year};
+    saveViewPrefs();
+    refreshViews();
+  }
+
+  // 데이터에 등장하는 연도 + 올해 주변을 연도 선택 목록으로 씁니다.
+  function selectableYears(){
+    const now = new Date().getFullYear();
+    const set = {};
+    [now - 1, now, now + 1].forEach(function(y){ set[y] = true; });
+    set[periodFilter.year] = true;
+    state.groups.forEach(function(g){
+      g.tasks.forEach(function(t){
+        [t.start, t.end].forEach(function(s){
+          if(s && s.length >= 4){ const y = Number(s.slice(0,4)); if(y) set[y] = true; }
+        });
+      });
+    });
+    return Object.keys(set).map(Number).sort(function(a,b){ return a - b; });
+  }
+
+  function renderFilterBar(){
+    const yearSel = document.getElementById('filterYear');
+    if(yearSel){
+      const years = selectableYears();
+      yearSel.innerHTML = '';
+      years.forEach(function(y){
+        yearSel.appendChild(el('option', Object.assign({value:String(y)},
+          y === periodFilter.year ? {selected:'selected'} : {}), [y + '년']));
+      });
+      yearSel.disabled = periodFilter.mode === 'all';
+    }
+
+    const chips = document.getElementById('filterChips');
+    if(chips){
+      chips.innerHTML = '';
+      PERIOD_CHIPS.forEach(function(c){
+        chips.appendChild(el('button', {
+          class: 'chip-btn' + (chipIsActive(c.key) ? ' active' : ''),
+          onclick: function(){ applyChip(c.key); }
+        }, [c.label]));
+      });
+    }
+
+    const months = document.getElementById('filterMonths');
+    if(months){
+      months.innerHTML = '';
+      for(let m = 1; m <= 12; m++){
+        const key = 'm' + m;
+        months.appendChild(el('button', {
+          class: 'chip-btn' + (chipIsActive(key) ? ' active' : ''),
+          onclick: (function(k){ return function(){ applyChip(k); }; })(key)
+        }, [m + '월']));
+      }
+    }
+
+    const info = document.getElementById('filterInfo');
+    if(info){
+      const view = visibleRows();
+      const shown = view.rows.reduce(function(s, r){ return s + r.tasks.length; }, 0);
+      let text = periodLabel() + ' · 그룹 ' + view.rows.length + ' / 업무 ' + shown + '건';
+      if(view.hiddenGroups || view.hiddenTasks){
+        text += ' (숨김 그룹 ' + view.hiddenGroups + ' / 업무 ' + view.hiddenTasks + '건)';
+      }
+      info.textContent = text;
+    }
+
+    const btn = document.getElementById('btnGridDoneToggle');
+    if(btn){
+      const doneCount = state.groups.filter(isDoneGroup).length;
+      if(doneCount === 0){ btn.style.display = 'none'; }
+      else {
+        btn.style.display = '';
+        btn.textContent = gridShowDone
+          ? '완료 ' + doneCount + '개 그룹 접기 ▴'
+          : '완료 ' + doneCount + '개 그룹 펼치기 ▾';
+        btn.title = gridShowDone
+          ? '완료된 그룹의 상세 업무를 다시 접습니다'
+          : '완료된 그룹의 상세 업무를 펼쳐서 봅니다';
+      }
+    }
+  }
+
+  // 보기 설정만 바뀐 경우. 데이터를 저장하거나 동기화하지 않습니다.
+  function refreshViews(){
+    renderTable();
+    renderSummary();
+    renderGantt();
+    renderFilterBar();
+  }
+
   /* ---------------- Recalc ---------------- */
   function recalcTask(t){
     if(!t.endManual){
@@ -833,6 +1074,7 @@
     renderTable();
     renderSummary();
     renderGantt();
+    renderFilterBar();
     renderHolidayCoverage();
     save();
   }
@@ -843,11 +1085,12 @@
     recalcAll();
     renderSummary();
     renderGantt();
+    renderFilterBar();
     save();
   }
 
   /* ---------------- Table rendering ---------------- */
-  function buildGroupRow(g, gi){
+  function buildGroupRow(g, gi, displayNo){
     const tr = el('tr', {class:'group-row', draggable:'true'});
     tr.addEventListener('dragstart', function(e){
       if(['INPUT','BUTTON','SELECT','TEXTAREA'].indexOf(e.target.tagName)!==-1){ e.preventDefault(); return; }
@@ -872,11 +1115,18 @@
 
     const noTd = el('td', {class:'col-no'});
     const noWrap = el('div', {style:'display:flex; align-items:center; justify-content:flex-end; gap:4px;'});
-    noWrap.appendChild(el('button', {class:'reset-btn collapse-toggle no-print', title: g.collapsed?'펼치기':'접기', onclick:function(){
-      g.collapsed = !g.collapsed;
-      fullRender();
-    }}, [g.collapsed ? '▶' : '▼']));
-    noWrap.appendChild(el('span', {}, [String(gi+1)]));
+    const collapsed = isGridCollapsed(g);
+    noWrap.appendChild(el('button', {class:'reset-btn collapse-toggle no-print', title: collapsed?'펼치기':'접기', onclick:function(){
+      if(isDoneGroup(g)){
+        // 완료 그룹은 데이터(g.collapsed)를 건드리지 않고 이 화면에서만 잠깐 펼칩니다.
+        if(doneOverride.has(g.id)) doneOverride.delete(g.id); else doneOverride.add(g.id);
+        refreshViews();
+      } else {
+        g.collapsed = !g.collapsed;
+        fullRender();
+      }
+    }}, [collapsed ? '▶' : '▼']));
+    noWrap.appendChild(el('span', {}, [displayNo]));
     noTd.appendChild(noWrap);
     tr.appendChild(noTd);
 
@@ -912,7 +1162,7 @@
     return tr;
   }
 
-  function buildTaskRow(g, t, gi, ti){
+  function buildTaskRow(g, t, gi, ti, displayNo){
     const tr = el('tr', {class:'task-row', draggable:'true'});
     tr.addEventListener('dragstart', function(e){
       if(['INPUT','BUTTON','SELECT','TEXTAREA'].indexOf(e.target.tagName)!==-1){ e.preventDefault(); return; }
@@ -936,7 +1186,7 @@
       g.tasks.splice(to,0,moved);
       fullRender();
     });
-    tr.appendChild(el('td', {class:'col-no'}, [gi+1+'.'+(ti+1)]));
+    tr.appendChild(el('td', {class:'col-no'}, [displayNo]));
     tr.appendChild(el('td', {}, [
       el('input', {type:'text', draggable:'false', value:t.category, placeholder:'구분', oninput:function(e){ t.category=e.target.value; debouncedSave(); }, onblur:refreshDerived})
     ]));
@@ -1013,11 +1263,17 @@
       tbody.appendChild(el('tr', {}, [el('td', {colspan:'9', class:'empty'}, ['상단의 "+ 그룹 추가" 버튼을 눌러 WBS 작성을 시작하세요.'])]));
       return;
     }
-    state.groups.forEach(function(g, gi){
-      tbody.appendChild(buildGroupRow(g, gi));
-      if(g.collapsed) return;
-      g.tasks.forEach(function(t, ti){
-        tbody.appendChild(buildTaskRow(g, t, gi, ti));
+    const view = visibleRows();
+    if(view.rows.length===0){
+      tbody.appendChild(el('tr', {}, [el('td', {colspan:'9', class:'empty'}, ['선택한 조회기간에 해당하는 업무가 없습니다. 위에서 "전체"를 눌러보세요.'])]));
+      return;
+    }
+    // 순번은 화면에 보이는 순서대로 매기고, 편집·드래그에는 원래 데이터 위치를 넘깁니다.
+    view.rows.forEach(function(r, idx){
+      tbody.appendChild(buildGroupRow(r.g, r.dataIndex, String(idx+1)));
+      if(isGridCollapsed(r.g)) return;
+      r.tasks.forEach(function(item, ti){
+        tbody.appendChild(buildTaskRow(r.g, item.t, r.dataIndex, item.taskIndex, (idx+1)+'.'+(ti+1)));
       });
     });
   }
@@ -1026,8 +1282,9 @@
   function renderSummary(){
     const bar = document.getElementById('summaryBar');
     bar.innerHTML = '';
+    const view = visibleRows();
     let allTasks = [];
-    state.groups.forEach(function(g){ allTasks = allTasks.concat(g.tasks); });
+    view.rows.forEach(function(r){ r.tasks.forEach(function(item){ allTasks.push(item.t); }); });
     const totalMd = allTasks.reduce(function(s,t){ return s+(Number(t.md)||0); }, 0);
     const starts = allTasks.map(function(t){ return t.start; }).filter(Boolean).sort();
     const ends = allTasks.map(function(t){ return t.end; }).filter(Boolean).sort();
@@ -1049,7 +1306,7 @@
       ]);
     }
 
-    bar.appendChild(statCard('그룹 수', statValue(String(state.groups.length), '개')));
+    bar.appendChild(statCard('그룹 수', statValue(String(view.rows.length), '개')));
     bar.appendChild(statCard('전체 업무 수', statValue(String(total), '건')));
     bar.appendChild(statCard('총 M/D', statValue(String(totalMd), 'MD')));
 
@@ -1140,12 +1397,10 @@
   }
 
   // 완료된 그룹이 하나도 없으면 버튼 자체를 감춥니다.
-  function renderGanttDoneToggle(){
+  function renderGanttDoneToggle(rows){
     const btn = document.getElementById('btnGanttDoneToggle');
     if(!btn) return;
-    const doneCount = state.groups.filter(function(g){
-      return g._status === '완료' && g.tasks.length > 0;
-    }).length;
+    const doneCount = (rows || []).filter(function(r){ return isDoneGroup(r.g); }).length;
     if(doneCount === 0){
       btn.style.display = 'none';
       return;
@@ -1170,9 +1425,10 @@
   function renderGantt(){
     const container = document.getElementById('ganttInner');
     container.innerHTML = '';
-    renderGanttDoneToggle();
+    const view = visibleRows();
+    renderGanttDoneToggle(view.rows);
     let allTasks = [];
-    state.groups.forEach(function(g){ allTasks = allTasks.concat(g.tasks); });
+    view.rows.forEach(function(r){ r.tasks.forEach(function(item){ allTasks.push(item.t); }); });
     const validStarts = allTasks.map(function(t){ return t.start; }).filter(Boolean);
     const validEnds = allTasks.map(function(t){ return t.end; }).filter(Boolean);
     if(validStarts.length===0 || validEnds.length===0){
@@ -1219,7 +1475,8 @@
     table.appendChild(thead);
 
     const tbody = el('tbody');
-    state.groups.forEach(function(g, gi){
+    view.rows.forEach(function(r, gi){
+      const g = r.g;
       const gtr = el('tr', {class:'gantt-row-group'});
       gtr.appendChild(el('td', {class:'sticky-c1'}, [(gi+1)+'']));
       gtr.appendChild(el('td', {class:'sticky-c2'}, [g.category||'']));
@@ -1228,16 +1485,16 @@
       // 접혀 있으면 막대가 보이지 않으므로, 왜 비었는지 그룹 행에 표시해 줍니다.
       const ganttDoneCollapsed = isGanttDoneCollapsed(g);
       if(ganttDoneCollapsed){
-        groupTitleTd.appendChild(el('span', {class:'gantt-collapsed-note'}, [' · 완료 '+g.tasks.length+'건 접힘']));
+        groupTitleTd.appendChild(el('span', {class:'gantt-collapsed-note'}, [' · 완료 '+r.tasks.length+'건 접힘']));
       }
       gtr.appendChild(groupTitleTd);
       tbody.appendChild(gtr);
 
       // 완료 그룹은 간트 전용 토글이 표의 접기 상태보다 우선합니다.
       // (표에서 접어둔 완료 그룹이 "펼치기"에 반응하지 않던 문제)
-      const isDoneGroup = g._status === '완료' && g.tasks.length > 0;
-      if(isDoneGroup ? ganttDoneCollapsed : g.collapsed) return;
-      g.tasks.forEach(function(t, ti){
+      if(isDoneGroup(g) ? ganttDoneCollapsed : g.collapsed) return;
+      r.tasks.forEach(function(item, ti){
+        const t = item.t;
         const ttr = el('tr', {class:'gantt-row-task'});
         ganttLabelCells((gi+1)+'.'+(ti+1), t.category, t.detail).forEach(function(td){ ttr.appendChild(td); });
         weeks.forEach(function(w){
@@ -1739,6 +1996,11 @@
     const g = makeGroup();
     g.tasks.push(makeTask());
     state.groups.push(g);
+    // 조회기간이 걸려 있으면 새 그룹이 곧바로 걸러져 사라져 보입니다. 전체로 되돌립니다.
+    if(periodFilter.mode !== 'all'){
+      periodFilter = {mode:'all', year:periodFilter.year};
+      saveViewPrefs();
+    }
     fullRender();
   });
   document.getElementById('btnSaveNow').addEventListener('click', function(){
@@ -1876,6 +2138,20 @@
     saveGanttPref();
     renderGantt();
   });
+  document.getElementById('filterYear').addEventListener('change', function(e){
+    const y = Number(e.target.value);
+    if(!y) return;
+    // 전체 보기 상태에서 연도를 고르면 그 해 전체로 전환합니다.
+    periodFilter = {mode: periodFilter.mode === 'all' ? 'year' : periodFilter.mode, year:y};
+    saveViewPrefs();
+    refreshViews();
+  });
+  document.getElementById('btnGridDoneToggle').addEventListener('click', function(){
+    gridShowDone = !gridShowDone;
+    doneOverride.clear();
+    saveViewPrefs();
+    refreshViews();
+  });
   document.getElementById('btnPrint').addEventListener('click', function(){ window.print(); });
   document.getElementById('btnClearAll').addEventListener('click', function(){
     if(confirm('모든 WBS 데이터를 삭제할까요? 이 작업은 되돌릴 수 없습니다.')){
@@ -1911,6 +2187,7 @@
   }
   loadHolidayStorage();
   loadGanttPref();
+  loadViewPrefs();
   initState().then(function(){
     // 방금 서버에서 받아온 내용을 그대로 되돌려 올리지 않도록 첫 렌더는 업로드를 막습니다.
     suppressRemotePush = true;

@@ -143,7 +143,8 @@
   .rm-gridline{position:absolute; top:0; bottom:0; width:1px; background:var(--border);}
   .rm-gridline.w{opacity:.45;}
   .rm-gridline.q{background:var(--sub); opacity:.3;}
-  .rm-bar{position:absolute; height:10px; border-radius:5px;}
+  /* 간트와 같은 옅은 색이라 얇으면 안 보여서 두께를 키우고 테두리를 둡니다. */
+  .rm-bar{position:absolute; height:14px; border-radius:4px; border:1px solid rgba(43,49,64,.18);}
   .rm-label{
     position:absolute; font-size:11px; color:var(--text);
     white-space:nowrap; pointer-events:none; max-width:220px;
@@ -157,7 +158,10 @@
   .rm-empty{padding:16px; font-size:12.5px; color:var(--sub);}
   .rm-legend{display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:10px; font-size:12px;}
   .rm-legend-item{display:inline-flex; align-items:center; gap:6px; color:var(--sub);}
-  .rm-legend-swatch{width:14px; height:9px; border-radius:4px; flex:0 0 auto;}
+  .rm-legend-swatch{
+    width:16px; height:11px; border-radius:3px; flex:0 0 auto;
+    border:1px solid rgba(43,49,64,.18);
+  }
   .filter-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
   .filter-label{font-size:12px; font-weight:700; color:var(--sub); white-space:nowrap;}
   .filter-year{
@@ -293,14 +297,14 @@
   .gantt-row-group td.sticky-c1, .gantt-row-group td.sticky-c2{background:var(--group-bg); color:var(--group-text);}
   .gantt-row-group td.gantt-group-title{background:var(--group-bg); color:var(--group-text); text-align:left; padding-left:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .gantt-week-th.current-week{color:var(--danger);}
+  /* 구분별 색 — 타임라인 탭과 같은 값을 씁니다(JS의 CATEGORY_COLORS).
+     기획·작성 노랑 / 검토 초록 / 수정 핑크 / 보고 파랑 / 그 외 회색 */
   td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#e8e8e8;}
   td.gantt-cell[data-category="기획"]{background:#f3ecd7;}
   td.gantt-cell[data-category="작성"]{background:#f3ecd7;}
-  td.gantt-cell[data-category="수정"]{background:#f0e2d6;}
   td.gantt-cell[data-category="검토"]{background:#e4ecdd;}
-  td.gantt-cell[data-category="테스트"]{background:#eaeaea;}
+  td.gantt-cell[data-category="수정"]{background:#f0e2d6;}
   td.gantt-cell[data-category="보고"]{background:#e2e9f0;}
-  td.gantt-cell[data-category="배포"]{background:#dfe4ee;}
 
   /* Modal */
   .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50;}
@@ -1670,13 +1674,22 @@
   /* ---------------- Timeline (스윔레인 로드맵) ---------------- */
   // 그룹을 가로 레인으로 두고, 상세 업무를 기간에 맞춰 막대로 배치합니다.
   // 색은 "구분"별로 자동 배정하고 아래 범례에 정리합니다.
-  const ROADMAP_PALETTE = [
-    '#e8453c', '#2f80ed', '#f2c94c', '#27ae60', '#9aa0a6',
-    '#8e44ad', '#e67e22', '#16a085', '#c2185b', '#0097a7'
-  ];
+  // 구분별 색. 간트차트 셀(css의 td.gantt-cell[data-category])과 같은 값입니다.
+  const CATEGORY_COLORS = {
+    '기획': '#f3ecd7',   // 노랑
+    '작성': '#f3ecd7',   // 노랑
+    '검토': '#e4ecdd',   // 초록
+    '수정': '#f0e2d6',   // 핑크
+    '보고': '#e2e9f0'    // 파랑
+  };
+  const CATEGORY_DEFAULT = '#e8e8e8';   // 그 외는 회색
+  function categoryColor(cat){
+    return Object.prototype.hasOwnProperty.call(CATEGORY_COLORS, cat) ? CATEGORY_COLORS[cat] : CATEGORY_DEFAULT;
+  }
   const RM_NAME_W = 150;   // 좌측 그룹 이름 칸 너비(px)
-  const RM_ROW_H = 34;     // 레인 안에서 막대 한 줄 높이(px)
+  const RM_ROW_H = 38;     // 레인 안에서 막대 한 줄 높이(px)
   const RM_LABEL_W = 96;   // 막대 위 라벨이 차지한다고 보는 최소 너비(px)
+  const RM_WEEK_W = 30;    // 주 칸 너비(px) — 모든 주가 같은 너비
 
   function renderTimeline(){
     const box = document.getElementById('timelineInner');
@@ -1705,25 +1718,63 @@
     const to = new Date(maxD.getFullYear(), maxD.getMonth() + 1, 0);
     const DAY = 86400000;
     const totalDays = Math.round((to - from) / DAY) + 1;
-    const monthCount = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()) + 1;
-    // 한 달 안에 주(1W~5W)가 들어가야 하므로 달 폭을 넉넉히 잡습니다.
-    const trackW = Math.max(900, monthCount * 120);
-    const pxPerDay = trackW / totalDays;
-    function xOf(d){ return Math.round((d - from) / DAY * pxPerDay); }
 
-    // 구분별 색을 등장 순서대로 고정 배정합니다.
-    const colorMap = {};
-    let colorIdx = 0;
-    function colorOf(cat){
-      const key = cat || '기타';
-      if(!Object.prototype.hasOwnProperty.call(colorMap, key)){
-        colorMap[key] = ROADMAP_PALETTE[colorIdx % ROADMAP_PALETTE.length];
-        colorIdx++;
+    // 축을 날짜가 아니라 "주 칸" 단위로 만듭니다. 그래야 29~31일뿐인 5W도
+    // 다른 주와 같은 너비가 되고, 막대 위치도 머리글과 어긋나지 않습니다.
+    // 주 구분은 간트차트와 같습니다(1~7일=1W, 8~14일=2W ...).
+    const weekCols = [];
+    (function(){
+      const cur = new Date(from.getFullYear(), from.getMonth(), 1);
+      while(cur <= to){
+        const y = cur.getFullYear(), m = cur.getMonth();
+        const last = new Date(y, m + 1, 0).getDate();
+        let d = 1, wi = 0;
+        while(d <= last){
+          const s = new Date(y, m, d);
+          const e = new Date(y, m, Math.min(d + 6, last));
+          wi++;
+          weekCols.push({
+            start:s, end:e, days:Math.round((e - s) / DAY) + 1,
+            label:wi + 'W', year:y, month:m
+          });
+          d += 7;
+        }
+        cur.setMonth(cur.getMonth() + 1);
       }
-      return colorMap[key];
+    })();
+    const trackW = weekCols.length * RM_WEEK_W;
+
+    // 날짜 → x 좌표와 그 날 하루가 차지하는 폭을 미리 계산해 둡니다.
+    const xByDay = new Array(totalDays);
+    const dayWByDay = new Array(totalDays);
+    weekCols.forEach(function(c, i){
+      const base = Math.round((c.start - from) / DAY);
+      for(let k = 0; k < c.days; k++){
+        const off = base + k;
+        if(off < 0 || off >= totalDays) continue;
+        xByDay[off] = Math.round(i * RM_WEEK_W + (k / c.days) * RM_WEEK_W);
+        dayWByDay[off] = RM_WEEK_W / c.days;
+      }
+    });
+    function xOf(d){
+      const off = Math.round((d - from) / DAY);
+      if(off < 0) return 0;
+      if(off >= totalDays) return trackW;
+      return xByDay[off];
     }
+    function dayWOf(d){
+      const off = Math.round((d - from) / DAY);
+      if(off < 0 || off >= totalDays) return RM_WEEK_W / 7;
+      return dayWByDay[off];
+    }
+
+    // 범례에 쓸 구분 목록만 등장 순서대로 모읍니다. 색은 고정 색상표를 씁니다.
+    const usedCategories = [];
     view.rows.forEach(function(r){
-      r.tasks.forEach(function(item){ colorOf(item.t.category); });
+      r.tasks.forEach(function(item){
+        const c = item.t.category || '기타';
+        if(usedCategories.indexOf(c) === -1) usedCategories.push(c);
+      });
     });
 
     const rm = el('div', {class:'rm', style:'--rm-name-w:' + RM_NAME_W + 'px;'});
@@ -1735,54 +1786,42 @@
     const quarterStarts = [], monthStarts = [], weekStarts = [];
     const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    let qy = from.getFullYear(), qi = Math.floor(from.getMonth() / 3);
-    while(true){
-      const qs = new Date(qy, qi * 3, 1);
-      const qe = new Date(qy, qi * 3 + 3, 0);
-      if(qs > to) break;
-      const s = qs < from ? from : qs;
-      const e = qe > to ? to : qe;
-      const x = xOf(s), w = xOf(e) - x + Math.round(pxPerDay);
-      qRow.appendChild(el('div', {
-        class:'rm-q',
-        style:'left:' + (x + 2) + 'px; width:' + Math.max(0, w - 4) + 'px;'
-      }, ['Q' + (qi + 1) + ' ' + qy]));
-      if(qs > from) quarterStarts.push(xOf(qs));
-      qi++; if(qi > 3){ qi = 0; qy++; }
-    }
+    // 주 칸은 전부 같은 너비입니다.
+    weekCols.forEach(function(c, i){
+      const x = i * RM_WEEK_W;
+      wRow.appendChild(el('div', {
+        class:'rm-w' + (today >= c.start && today <= c.end ? ' current' : ''),
+        style:'left:' + x + 'px; width:' + RM_WEEK_W + 'px;'
+      }, [c.label]));
+      if(i > 0) weekStarts.push(x);
+    });
 
-    // 월과 그 안의 주. 주 구분은 간트차트와 같은 규칙입니다(1~7일=1W, 8~14일=2W ...).
-    const cur = new Date(from.getFullYear(), from.getMonth(), 1);
-    while(cur <= to){
-      const y = cur.getFullYear(), m = cur.getMonth();
-      const mFirst = new Date(y, m, 1);
-      const mLast = new Date(y, m + 1, 0);
-      const ms = mFirst < from ? from : mFirst;
-      const me = mLast > to ? to : mLast;
-      const mx = xOf(ms), mw = xOf(me) - mx + Math.round(pxPerDay);
-      mRow.appendChild(el('div', {class:'rm-m', style:'left:' + mx + 'px; width:' + mw + 'px;'}, [(m + 1) + '월']));
-      if(mFirst > from) monthStarts.push(xOf(mFirst));
-
-      const daysInMonth = mLast.getDate();
-      let d = 1, wi = 0;
-      while(d <= daysInMonth){
-        const ws = new Date(y, m, d);
-        const we = new Date(y, m, Math.min(d + 6, daysInMonth));
-        wi++;
-        if(we >= from && ws <= to){
-          const s2 = ws < from ? from : ws;
-          const e2 = we > to ? to : we;
-          const wx = xOf(s2), ww = xOf(e2) - wx + Math.round(pxPerDay);
-          wRow.appendChild(el('div', {
-            class:'rm-w' + (today >= ws && today <= we ? ' current' : ''),
-            style:'left:' + wx + 'px; width:' + ww + 'px;'
-          }, [wi + 'W']));
-          if(ws > from) weekStarts.push(wx);
-        }
-        d += 7;
+    // 월·분기는 주 칸을 묶어서 만듭니다.
+    function groupCols(keyOf, labelOf, rowEl, startsArr, cls, inset){
+      let i = 0;
+      while(i < weekCols.length){
+        const key = keyOf(weekCols[i]);
+        let j = i;
+        while(j < weekCols.length && keyOf(weekCols[j]) === key) j++;
+        const x = i * RM_WEEK_W, w = (j - i) * RM_WEEK_W;
+        rowEl.appendChild(el('div', {
+          class: cls,
+          style: 'left:' + (x + inset) + 'px; width:' + Math.max(0, w - inset * 2) + 'px;'
+        }, [labelOf(weekCols[i])]));
+        if(i > 0) startsArr.push(x);
+        i = j;
       }
-      cur.setMonth(cur.getMonth() + 1);
     }
+    groupCols(
+      function(c){ return c.year + '-' + c.month; },
+      function(c){ return (c.month + 1) + '월'; },
+      mRow, monthStarts, 'rm-m', 0
+    );
+    groupCols(
+      function(c){ return c.year + '-Q' + Math.floor(c.month / 3); },
+      function(c){ return 'Q' + (Math.floor(c.month / 3) + 1) + ' ' + c.year; },
+      qRow, quarterStarts, 'rm-q', 2
+    );
 
     const axis = el('div', {class:'rm-axis', style:'width:' + trackW + 'px;'}, [qRow, mRow, wRow]);
     rm.appendChild(el('div', {class:'rm-row rm-head'}, [el('div', {class:'rm-corner'}), axis]));
@@ -1815,7 +1854,7 @@
           if(!s || !parseISO(s)) return;
           const x = xOf(parseISO(s));
           const endD = parseISO(e) || parseISO(s);
-          const w = Math.max(8, xOf(endD) - x + Math.round(pxPerDay));
+          const w = Math.max(8, xOf(endD) - x + Math.round(dayWOf(endD)));
           let row = 0;
           while(row < rowEnds.length && rowEnds[row] > x - 8) row++;
           rowEnds[row] = x + Math.max(w, RM_LABEL_W);
@@ -1842,7 +1881,7 @@
       }
 
       bars.forEach(function(b){
-        const top = b.row * RM_ROW_H + 22;
+        const top = b.row * RM_ROW_H + 21;
         const tip = (b.t.category ? b.t.category + ' · ' : '') + (b.t.detail || '') +
           ' (' + fmtDisplay(b.t.start) + ' ~ ' + fmtDisplay(b.t.end) + ', ' +
           (Number(b.t.md) || 0) + 'MD, ' + (b.t.assignee || '담당 미지정') + ')';
@@ -1861,7 +1900,7 @@
         } else {
           track.appendChild(el('div', {
             class:'rm-bar',
-            style:'left:' + b.x + 'px; width:' + b.w + 'px; top:' + top + 'px; background:' + colorOf(b.t.category) + ';',
+            style:'left:' + b.x + 'px; width:' + b.w + 'px; top:' + top + 'px; background:' + categoryColor(b.t.category) + ';',
             title: tip
           }));
         }
@@ -1878,9 +1917,9 @@
     box.appendChild(el('div', {class:'rm-scroll'}, [rm]));
 
     const legend = el('div', {class:'rm-legend'});
-    Object.keys(colorMap).forEach(function(k){
+    usedCategories.forEach(function(k){
       legend.appendChild(el('span', {class:'rm-legend-item'}, [
-        el('span', {class:'rm-legend-swatch', style:'background:' + colorMap[k] + ';'}),
+        el('span', {class:'rm-legend-swatch', style:'background:' + categoryColor(k) + ';'}),
         k
       ]));
     });
@@ -2151,7 +2190,9 @@
 
   // Category -> cellXfs style index used by the Gantt sheet (see STYLES in exportXlsx)
   function ganttCategoryStyle(category){
-    const map = {'작성':3, '기획':3, '수정':4, '검토':5, '테스트':6, '보고':7, '배포':8};
+    // 화면(타임라인·간트)의 CATEGORY_COLORS와 같은 매핑입니다.
+    // 3=노랑, 5=초록, 4=핑크, 7=파랑, 9=회색(그 외)
+    const map = {'기획':3, '작성':3, '검토':5, '수정':4, '보고':7};
     return Object.prototype.hasOwnProperty.call(map, category) ? map[category] : 9;
   }
 

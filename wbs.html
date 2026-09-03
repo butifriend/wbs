@@ -299,12 +299,12 @@
   .gantt-week-th.current-week{color:var(--danger);}
   /* 구분별 색 — 타임라인 탭과 같은 값을 씁니다(JS의 CATEGORY_COLORS).
      기획·작성 노랑 / 검토 초록 / 수정 핑크 / 보고 파랑 / 그 외 회색 */
-  td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#e8e8e8;}
-  td.gantt-cell[data-category="기획"]{background:#f3ecd7;}
-  td.gantt-cell[data-category="작성"]{background:#f3ecd7;}
-  td.gantt-cell[data-category="검토"]{background:#e4ecdd;}
-  td.gantt-cell[data-category="수정"]{background:#f0e2d6;}
-  td.gantt-cell[data-category="보고"]{background:#e2e9f0;}
+  td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#b8b8b8;}
+  td.gantt-cell[data-category="기획"]{background:#f2c94c;}
+  td.gantt-cell[data-category="작성"]{background:#f2c94c;}
+  td.gantt-cell[data-category="검토"]{background:#90ca5e;}
+  td.gantt-cell[data-category="수정"]{background:#eda15e;}
+  td.gantt-cell[data-category="보고"]{background:#559ee7;}
 
   /* Modal */
   .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50;}
@@ -1675,14 +1675,16 @@
   // 그룹을 가로 레인으로 두고, 상세 업무를 기간에 맞춰 막대로 배치합니다.
   // 색은 "구분"별로 자동 배정하고 아래 범례에 정리합니다.
   // 구분별 색. 간트차트 셀(css의 td.gantt-cell[data-category])과 같은 값입니다.
+  // 기존 옅은 색의 색조(H)를 그대로 두고 채도만 올린 값입니다.
+  //   노랑 H45 / 초록 H92 / 살구 H28 / 파랑 H210
   const CATEGORY_COLORS = {
-    '기획': '#f3ecd7',   // 노랑
-    '작성': '#f3ecd7',   // 노랑
-    '검토': '#e4ecdd',   // 초록
-    '수정': '#f0e2d6',   // 핑크
-    '보고': '#e2e9f0'    // 파랑
+    '기획': '#f2c94c',   // 노랑  H45  S54->86
+    '작성': '#f2c94c',   // 노랑  H45  S54->86
+    '검토': '#90ca5e',   // 초록  H92  S28->50
+    '수정': '#eda15e',   // 살구  H28  S46->80
+    '보고': '#559ee7'    // 파랑  H210 S32->75
   };
-  const CATEGORY_DEFAULT = '#e8e8e8';   // 그 외는 회색
+  const CATEGORY_DEFAULT = '#b8b8b8';   // 그 외는 회색(무채색이라 명도만 낮춤)
   function categoryColor(cat){
     return Object.prototype.hasOwnProperty.call(CATEGORY_COLORS, cat) ? CATEGORY_COLORS[cat] : CATEGORY_DEFAULT;
   }

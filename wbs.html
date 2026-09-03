@@ -136,14 +136,15 @@
   .rm-w.current{color:var(--danger); font-weight:700;}
   .rm-lane{border-bottom:1px solid var(--border);}
   .rm-lane:last-child{border-bottom:none;}
+  /* WBS 그리드의 그룹 타이틀 행(tr.group-row)과 같은 색을 씁니다. */
   .rm-name{
     flex:0 0 var(--rm-name-w); position:sticky; left:0; z-index:2;
     display:flex; flex-direction:column; justify-content:center; gap:3px;
-    padding:10px 12px; background:#6b7280; color:#fff;
-    border-right:1px solid var(--border); border-bottom:2px solid var(--panel);
+    padding:10px 12px; background:var(--group-bg); color:var(--group-text);
+    border-right:1px solid var(--border);
   }
   .rm-name-title{font-size:13px; font-weight:700; line-height:1.35;}
-  .rm-name-sub{font-size:10.5px; opacity:.85; line-height:1.4;}
+  .rm-name-sub{font-size:10.5px; color:var(--group-text-muted); line-height:1.4;}
   .rm-track{position:relative; flex:0 0 auto; background:var(--panel);}
   .rm-gridline{position:absolute; top:0; bottom:0; width:1px; background:var(--border);}
   .rm-gridline.w{opacity:.45;}
@@ -206,6 +207,14 @@
     background:var(--border); margin:10px 0 9px;
   }
   .progress-seg{height:100%;}
+  /* 막대는 WBS 그리드 상태 도형(.status-pill)의 배경색을 그대로 씁니다.
+     범례 점은 아래 .seg-* 의 진한 글자색을 계속 써서 구분이 남습니다. */
+  .progress-seg.seg-done{background:var(--st-done-bg);}
+  .progress-seg.seg-progress{background:var(--st-progress-bg);}
+  .progress-seg.seg-hold{background:var(--st-hold-bg);}
+  .progress-seg.seg-plan{background:var(--st-plan-bg);}
+  /* 색이 옅어 서로 붙어 보이므로 구간 사이에 얇은 경계를 둡니다. */
+  .progress-seg + .progress-seg{box-shadow:inset 1px 0 0 var(--panel);}
   .stat-legend{display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px;}
   .legend-item{display:inline-flex; align-items:center; gap:5px; color:var(--sub); white-space:nowrap;}
   .legend-dot{width:8px; height:8px; border-radius:50%; flex:0 0 auto;}

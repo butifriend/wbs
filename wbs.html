@@ -81,9 +81,12 @@
   .filter-panel{
     position:absolute; top:calc(100% + 6px); left:0; z-index:45;
     background:var(--panel); border:1px solid var(--border); border-radius:10px;
-    box-shadow:var(--shadow); padding:10px; min-width:440px;
+    box-shadow:var(--shadow); padding:10px; width:392px;
     display:flex; flex-direction:column; gap:8px;
   }
+  /* 한 줄에 최대 6개(58 x 6 + 간격 4 x 5 = 368px). 패널 내용폭 370px에 맞췄습니다. */
+  .filter-panel .filter-chips{flex-wrap:nowrap;}
+  .filter-panel .chip-btn{flex:0 0 58px; padding:4px 2px; text-align:center;}
   .filter-panel.hidden{display:none;}
   .filter-panel-row{display:flex; align-items:center; gap:8px;}
 
@@ -108,13 +111,24 @@
     flex:0 0 var(--rm-name-w); position:sticky; left:0; z-index:3;
     background:var(--bg); border-right:1px solid var(--border);
   }
-  .rm-axis{position:relative; flex:0 0 auto; height:30px; background:var(--bg);}
+  .rm-axis{position:relative; flex:0 0 auto; background:var(--bg);}
+  .rm-axis-q{position:relative; height:26px;}
+  .rm-axis-m{position:relative; height:22px; border-top:1px solid var(--border);}
+  .rm-axis-w{position:relative; height:20px; border-top:1px solid var(--border);}
   .rm-q{
-    position:absolute; top:4px; bottom:4px;
+    position:absolute; top:3px; bottom:3px;
     display:flex; align-items:center; justify-content:center;
     font-size:12px; font-weight:700; color:#fff; background:#9aa0a6;
     border-radius:3px;
   }
+  .rm-m, .rm-w{
+    position:absolute; top:0; bottom:0; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    border-left:1px solid var(--border);
+  }
+  .rm-m{font-size:11px; font-weight:700; color:var(--text);}
+  .rm-w{font-size:9.5px; color:var(--sub);}
+  .rm-w.current{color:var(--danger); font-weight:700;}
   .rm-lane{border-bottom:1px solid var(--border);}
   .rm-lane:last-child{border-bottom:none;}
   .rm-name{
@@ -127,6 +141,7 @@
   .rm-name-sub{font-size:10.5px; opacity:.85; line-height:1.4;}
   .rm-track{position:relative; flex:0 0 auto; background:var(--panel);}
   .rm-gridline{position:absolute; top:0; bottom:0; width:1px; background:var(--border);}
+  .rm-gridline.w{opacity:.45;}
   .rm-gridline.q{background:var(--sub); opacity:.3;}
   .rm-bar{position:absolute; height:10px; border-radius:5px;}
   .rm-label{
@@ -1691,7 +1706,8 @@
     const DAY = 86400000;
     const totalDays = Math.round((to - from) / DAY) + 1;
     const monthCount = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()) + 1;
-    const trackW = Math.max(860, monthCount * 96);
+    // 한 달 안에 주(1W~5W)가 들어가야 하므로 달 폭을 넉넉히 잡습니다.
+    const trackW = Math.max(900, monthCount * 120);
     const pxPerDay = trackW / totalDays;
     function xOf(d){ return Math.round((d - from) / DAY * pxPerDay); }
 
@@ -1712,10 +1728,14 @@
 
     const rm = el('div', {class:'rm', style:'--rm-name-w:' + RM_NAME_W + 'px;'});
 
-    // 분기 헤더
-    const axis = el('div', {class:'rm-axis', style:'width:' + trackW + 'px;'});
+    // 분기 / 월 / 주 3단 헤더
+    const qRow = el('div', {class:'rm-axis-q'});
+    const mRow = el('div', {class:'rm-axis-m'});
+    const wRow = el('div', {class:'rm-axis-w'});
+    const quarterStarts = [], monthStarts = [], weekStarts = [];
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+
     let qy = from.getFullYear(), qi = Math.floor(from.getMonth() / 3);
-    const quarterStarts = [];
     while(true){
       const qs = new Date(qy, qi * 3, 1);
       const qe = new Date(qy, qi * 3 + 3, 0);
@@ -1723,27 +1743,56 @@
       const s = qs < from ? from : qs;
       const e = qe > to ? to : qe;
       const x = xOf(s), w = xOf(e) - x + Math.round(pxPerDay);
-      axis.appendChild(el('div', {
+      qRow.appendChild(el('div', {
         class:'rm-q',
         style:'left:' + (x + 2) + 'px; width:' + Math.max(0, w - 4) + 'px;'
       }, ['Q' + (qi + 1) + ' ' + qy]));
       if(qs > from) quarterStarts.push(xOf(qs));
       qi++; if(qi > 3){ qi = 0; qy++; }
     }
+
+    // 월과 그 안의 주. 주 구분은 간트차트와 같은 규칙입니다(1~7일=1W, 8~14일=2W ...).
+    const cur = new Date(from.getFullYear(), from.getMonth(), 1);
+    while(cur <= to){
+      const y = cur.getFullYear(), m = cur.getMonth();
+      const mFirst = new Date(y, m, 1);
+      const mLast = new Date(y, m + 1, 0);
+      const ms = mFirst < from ? from : mFirst;
+      const me = mLast > to ? to : mLast;
+      const mx = xOf(ms), mw = xOf(me) - mx + Math.round(pxPerDay);
+      mRow.appendChild(el('div', {class:'rm-m', style:'left:' + mx + 'px; width:' + mw + 'px;'}, [(m + 1) + '월']));
+      if(mFirst > from) monthStarts.push(xOf(mFirst));
+
+      const daysInMonth = mLast.getDate();
+      let d = 1, wi = 0;
+      while(d <= daysInMonth){
+        const ws = new Date(y, m, d);
+        const we = new Date(y, m, Math.min(d + 6, daysInMonth));
+        wi++;
+        if(we >= from && ws <= to){
+          const s2 = ws < from ? from : ws;
+          const e2 = we > to ? to : we;
+          const wx = xOf(s2), ww = xOf(e2) - wx + Math.round(pxPerDay);
+          wRow.appendChild(el('div', {
+            class:'rm-w' + (today >= ws && today <= we ? ' current' : ''),
+            style:'left:' + wx + 'px; width:' + ww + 'px;'
+          }, [wi + 'W']));
+          if(ws > from) weekStarts.push(wx);
+        }
+        d += 7;
+      }
+      cur.setMonth(cur.getMonth() + 1);
+    }
+
+    const axis = el('div', {class:'rm-axis', style:'width:' + trackW + 'px;'}, [qRow, mRow, wRow]);
     rm.appendChild(el('div', {class:'rm-row rm-head'}, [el('div', {class:'rm-corner'}), axis]));
 
-    // 달 경계 세로선 (분기 경계는 진하게)
+    // 세로선: 주는 옅게, 월은 보통, 분기는 진하게 (뒤에 그린 것이 위에 옵니다)
     function gridLines(){
       const lines = [];
-      const cur = new Date(from.getFullYear(), from.getMonth() + 1, 1);
-      while(cur <= to){
-        const x = xOf(cur);
-        lines.push(el('div', {
-          class:'rm-gridline' + (quarterStarts.indexOf(x) !== -1 ? ' q' : ''),
-          style:'left:' + x + 'px;'
-        }));
-        cur.setMonth(cur.getMonth() + 1);
-      }
+      weekStarts.forEach(function(x){ lines.push(el('div', {class:'rm-gridline w', style:'left:' + x + 'px;'})); });
+      monthStarts.forEach(function(x){ lines.push(el('div', {class:'rm-gridline', style:'left:' + x + 'px;'})); });
+      quarterStarts.forEach(function(x){ lines.push(el('div', {class:'rm-gridline q', style:'left:' + x + 'px;'})); });
       return lines;
     }
 

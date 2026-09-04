@@ -863,28 +863,17 @@
     });
   }
 
-  // 서버가 충돌을 알려오면 자동 업로드를 멈추고 사용자에게 어느 쪽을 살릴지 물어봅니다.
-  async function handleConflict(result){
+  // 서버가 충돌을 알려오면 자동 업로드만 조용히 멈추고 상태 표시줄에 알립니다.
+  // 작업 중에 갑자기 팝업이 뜨지 않도록, 어느 쪽을 살릴지 묻는 선택은
+  // 사용자가 "저장"이나 "지금 동기화"를 직접 눌렀을 때(requestPush)만 띄웁니다.
+  function handleConflict(result){
     const remote = sanitizeState(result.data);
     syncBlocked = true;
     syncStatus = 'error';
-    syncStatusMessage = '다른 사람이 먼저 저장했습니다 ('+fmtRemoteTime(result.updatedAt)+') · 자동 업로드를 중지했습니다';
+    syncStatusMessage = remote
+      ? '다른 사람이 먼저 저장했습니다 ('+fmtRemoteTime(result.updatedAt)+') · "저장"을 누르면 반영 여부를 선택할 수 있습니다'
+      : '다른 사람이 먼저 저장한 내용을 읽을 수 없습니다 · "저장"을 눌러 다시 시도해주세요';
     renderSyncStatus();
-    if(!remote){
-      alert('다른 사람이 먼저 저장한 내용이 있는데, 그 내용을 읽을 수 없습니다.\n동기화 설정에서 "지금 동기화"로 다시 시도해주세요.');
-      return;
-    }
-    const loadServer = await showChoiceModal({
-      title: '다른 사람이 먼저 저장했습니다',
-      message:
-        '서버: 그룹 '+remote.groups.length+'개 / 업무 '+countTasks(remote)+'개 (저장 '+fmtRemoteTime(result.updatedAt)+')\n' +
-        '화면: 그룹 '+state.groups.length+'개 / 업무 '+countTasks(state)+'개',
-      confirmLabel: '서버 최신 내용 불러오기',
-      cancelLabel: '화면 유지 (업로드 중지)'
-    });
-    if(loadServer){
-      adoptRemote(remote, result.rev, result.updatedAt);
-    }
   }
 
   // 서버 데이터를 화면에 반영합니다. 이 과정에서 다시 서버로 올리지는 않습니다.

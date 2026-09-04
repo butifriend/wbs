@@ -986,6 +986,7 @@
 
   /* ---------------- 화면 표시 설정 (데이터가 아니라 보기 설정이라 동기화하지 않습니다) ---------------- */
   const GRID_SHOW_DONE_KEY = 'wbs_grid_show_done_v1';
+  const GRID_COLLAPSED_KEY = 'wbs_grid_collapsed_v1';
   const PERIOD_FILTER_KEY = 'wbs_period_filter_v1';
   const ACTIVE_VIEW_KEY = 'wbs_active_view_v1';
   const VIEWS = ['wbs', 'gantt', 'timeline'];
@@ -994,6 +995,9 @@
   let gridShowDone = false;
   // 전역 토글이 꺼진 상태에서 개별로 잠깐 펼쳐 둔 완료 그룹. 새로고침하면 초기화됩니다.
   const doneOverride = new Set();
+  // 표에서 접어 둔 그룹 id. 데이터(g.collapsed)가 아니라 이 브라우저에만 저장하므로
+  // 접고 펴는 동작이 팀원 화면에 영향을 주지 않습니다.
+  let collapsedIds = new Set();
   let periodFilter = {mode:'all', year:new Date().getFullYear()};
 
   function loadViewPrefs(){
@@ -1002,6 +1006,10 @@
       if(VIEWS.indexOf(v) !== -1) activeView = v;
     }catch(e){}
     try{ gridShowDone = localStorage.getItem(GRID_SHOW_DONE_KEY) === '1'; }catch(e){}
+    try{
+      const ids = JSON.parse(localStorage.getItem(GRID_COLLAPSED_KEY) || '[]');
+      if(Array.isArray(ids)) collapsedIds = new Set(ids.filter(function(v){ return typeof v === 'string'; }));
+    }catch(e){}
     try{
       const raw = JSON.parse(localStorage.getItem(PERIOD_FILTER_KEY) || 'null');
       if(raw && typeof raw.mode === 'string' && Number(raw.year)){
@@ -1012,6 +1020,7 @@
   function saveViewPrefs(){
     try{
       localStorage.setItem(GRID_SHOW_DONE_KEY, gridShowDone ? '1' : '0');
+      localStorage.setItem(GRID_COLLAPSED_KEY, JSON.stringify(Array.from(collapsedIds)));
       localStorage.setItem(PERIOD_FILTER_KEY, JSON.stringify(periodFilter));
       localStorage.setItem(ACTIVE_VIEW_KEY, activeView);
     }catch(e){}
@@ -1019,10 +1028,11 @@
 
   function isDoneGroup(g){ return g._status === '완료' && g.tasks.length > 0; }
 
-  // 완료 그룹은 상단 전역 토글이 우선하고, 그 외에는 표의 개별 접기 상태를 따릅니다.
+  // 완료 그룹은 상단 전역 토글이 우선하고, 그 외에는 이 브라우저에 저장된
+  // 접기 목록을 따릅니다. 데이터의 g.collapsed 는 더 이상 표에 쓰지 않습니다.
   function isGridCollapsed(g){
     if(isDoneGroup(g)) return !(gridShowDone || doneOverride.has(g.id));
-    return !!g.collapsed;
+    return collapsedIds.has(g.id);
   }
 
   // 선택한 조회기간의 [시작, 끝]. 'all'이면 null.
@@ -1218,15 +1228,14 @@
     renderFilterBar();
   }
 
-  // 전체 펼치기·접기. g.collapsed 는 화면 설정이 아니라 데이터라
-  // 저장·동기화가 함께 일어납니다(개별 ▶ 버튼과 같은 동작).
+  // 전체 펼치기·접기. 데이터를 건드리지 않고 이 브라우저의 접기 목록만 바꿉니다.
   function setAllCollapsed(collapsed){
-    state.groups.forEach(function(g){ g.collapsed = collapsed; });
+    collapsedIds = new Set(collapsed ? state.groups.map(function(g){ return g.id; }) : []);
     gridShowDone = !collapsed;
     doneOverride.clear();
     saveViewPrefs();
     closeCollapseMenu();
-    fullRender();
+    refreshViews();
   }
   // 완료 그룹만. 표시 설정이라 데이터를 건드리지 않습니다.
   function setDoneExpanded(expanded){
@@ -1345,14 +1354,15 @@
     const noWrap = el('div', {style:'display:flex; align-items:center; justify-content:flex-end; gap:4px;'});
     const collapsed = isGridCollapsed(g);
     noWrap.appendChild(el('button', {class:'reset-btn collapse-toggle no-print', title: collapsed?'펼치기':'접기', onclick:function(){
+      // 접고 펴는 동작은 모두 이 브라우저에만 남습니다. 데이터를 바꾸지 않으므로
+      // 저장·동기화가 일어나지 않고 팀원 화면에도 영향이 없습니다.
       if(isDoneGroup(g)){
-        // 완료 그룹은 데이터(g.collapsed)를 건드리지 않고 이 화면에서만 잠깐 펼칩니다.
         if(doneOverride.has(g.id)) doneOverride.delete(g.id); else doneOverride.add(g.id);
-        refreshViews();
       } else {
-        g.collapsed = !g.collapsed;
-        fullRender();
+        if(collapsedIds.has(g.id)) collapsedIds.delete(g.id); else collapsedIds.add(g.id);
       }
+      saveViewPrefs();
+      refreshViews();
     }}, [collapsed ? '▶' : '▼']));
     noWrap.appendChild(el('span', {}, [displayNo]));
     noTd.appendChild(noWrap);

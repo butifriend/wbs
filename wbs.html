@@ -536,6 +536,17 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="choiceModal">
+  <div class="modal" style="width:400px;">
+    <h2 id="choiceModalTitle"></h2>
+    <p id="choiceModalBody" style="font-size:13px; color:var(--text); line-height:1.7; white-space:pre-line;"></p>
+    <div class="modal-footer">
+      <button class="small" id="choiceModalCancel"></button>
+      <button class="primary small" id="choiceModalConfirm"></button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -826,26 +837,43 @@
     };
   }
 
-  // 서버가 충돌을 알려오면 자동 업로드를 멈추고 사용자에게 어느 쪽을 살릴지 물어봅니다.
+  // 브라우저 기본 confirm()은 작업 중 갑자기 화면을 멈추는 낯선 팝업이라, 앱과
+  // 같은 스타일의 모달로 대체합니다. 배경 클릭으로는 닫히지 않고, 두 버튼 중
+  // 하나를 눌러야만 결정되어 실수로 데이터를 잃지 않도록 합니다.
+  function showChoiceModal(opts){
+    return new Promise(function(resolve){
+      const overlay = document.getElementById('choiceModal');
+      document.getElementById('choiceModalTitle').textContent = opts.title;
+      document.getElementById('choiceModalBody').textContent = opts.message;
+      const confirmBtn = document.getElementById('choiceModalConfirm');
+      const cancelBtn = document.getElementById('choiceModalCancel');
+      confirmBtn.textContent = opts.confirmLabel;
+      cancelBtn.textContent = opts.cancelLabel;
+      function cleanup(result){
+        overlay.classList.add('hidden');
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
+        resolve(result);
+      }
+      function onConfirm(){ cleanup(true); }
+      function onCancel(){ cleanup(false); }
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
+      overlay.classList.remove('hidden');
+    });
+  }
+
+  // 서버가 충돌을 알려오면 자동 업로드만 조용히 멈추고 상태 표시줄에 알립니다.
+  // 작업 중에 갑자기 팝업이 뜨지 않도록, 어느 쪽을 살릴지 묻는 선택은
+  // 사용자가 "저장"이나 "지금 동기화"를 직접 눌렀을 때(requestPush)만 띄웁니다.
   function handleConflict(result){
     const remote = sanitizeState(result.data);
     syncBlocked = true;
     syncStatus = 'error';
-    syncStatusMessage = '다른 사람이 먼저 저장했습니다 ('+fmtRemoteTime(result.updatedAt)+') · 자동 업로드를 중지했습니다';
+    syncStatusMessage = remote
+      ? '다른 사람이 먼저 저장했습니다 ('+fmtRemoteTime(result.updatedAt)+') · "저장"을 누르면 반영 여부를 선택할 수 있습니다'
+      : '다른 사람이 먼저 저장한 내용을 읽을 수 없습니다 · "저장"을 눌러 다시 시도해주세요';
     renderSyncStatus();
-    if(!remote){
-      alert('다른 사람이 먼저 저장한 내용이 있는데, 그 내용을 읽을 수 없습니다.\n동기화 설정에서 "지금 동기화"로 다시 시도해주세요.');
-      return;
-    }
-    const msg =
-      '다른 사람이 먼저 저장한 내용이 서버에 있습니다.\n' +
-      '서버: 그룹 '+remote.groups.length+'개 / 업무 '+countTasks(remote)+'개 (저장 '+fmtRemoteTime(result.updatedAt)+')\n' +
-      '화면: 그룹 '+state.groups.length+'개 / 업무 '+countTasks(state)+'개\n\n' +
-      '[확인] 서버의 최신 내용을 불러옵니다 (지금 화면의 수정 내용은 사라집니다)\n' +
-      '[취소] 화면을 그대로 두고 업로드만 중지합니다 (동기화 설정 → 지금 동기화 에서 다시 선택 가능)';
-    if(confirm(msg)){
-      adoptRemote(remote, result.rev, result.updatedAt);
-    }
   }
 
   // 서버 데이터를 화면에 반영합니다. 이 과정에서 다시 서버로 올리지는 않습니다.
@@ -923,12 +951,15 @@
     }
     remoteRev = remote.rev;
     remoteUpdatedAt = remote.updatedAt;
-    const msg =
-      '서버: 그룹 '+remote.state.groups.length+'개 / 업무 '+countTasks(remote.state)+'개 (저장 '+fmtRemoteTime(remote.updatedAt)+')\n' +
-      '화면: 그룹 '+state.groups.length+'개 / 업무 '+countTasks(state)+'개\n\n' +
-      '[확인] 이 화면의 내용으로 서버를 덮어씁니다\n' +
-      '[취소] 서버 내용을 불러와 화면을 바꿉니다';
-    if(confirm(msg)){
+    const overwriteServer = await showChoiceModal({
+      title: '서버에도 저장된 내용이 있습니다',
+      message:
+        '서버: 그룹 '+remote.state.groups.length+'개 / 업무 '+countTasks(remote.state)+'개 (저장 '+fmtRemoteTime(remote.updatedAt)+')\n' +
+        '화면: 그룹 '+state.groups.length+'개 / 업무 '+countTasks(state)+'개',
+      confirmLabel: '이 화면 내용으로 서버 덮어쓰기',
+      cancelLabel: '서버 내용 불러오기'
+    });
+    if(overwriteServer){
       syncBlocked = false;
       clearTimeout(syncTimer);
       await pushRemoteState({force:true});

@@ -427,7 +427,21 @@
       </div>
       <span class="filter-info" id="filterInfo"></span>
       <span class="spacer"></span>
-      <button class="small" id="btnGridDoneToggle" style="display:none;"></button>
+      <div class="menu-wrap" id="collapseWrap">
+        <button class="small" id="btnCollapseMenu">펼치기 · 접기 ▾</button>
+        <div class="menu-panel hidden" id="collapseMenu">
+          <div class="menu-group">
+            <div class="menu-label">전체</div>
+            <button id="btnAllExpand">전체 펼치기</button>
+            <button id="btnAllCollapse">전체 접기</button>
+          </div>
+          <div class="menu-group">
+            <div class="menu-label">완료</div>
+            <button id="btnDoneExpand">완료 그룹 펼치기</button>
+            <button id="btnDoneCollapse">완료 그룹 접기</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1162,19 +1176,20 @@
       info.textContent = text;
     }
 
-    const btn = document.getElementById('btnGridDoneToggle');
-    if(btn){
-      const doneCount = state.groups.filter(isDoneGroup).length;
+    const wrap = document.getElementById('collapseWrap');
+    if(wrap){
       // 간트 탭은 자체 토글이 있으므로 여기서는 감춥니다.
-      if(doneCount === 0 || activeView === 'gantt'){ btn.style.display = 'none'; }
-      else {
-        btn.style.display = '';
-        btn.textContent = gridShowDone
-          ? '완료 ' + doneCount + '개 그룹 접기 ▴'
-          : '완료 ' + doneCount + '개 그룹 펼치기 ▾';
-        btn.title = gridShowDone
-          ? '완료된 그룹의 상세 업무를 다시 접습니다'
-          : '완료된 그룹의 상세 업무를 펼쳐서 봅니다';
+      wrap.style.display = (activeView === 'gantt') ? 'none' : '';
+      if(activeView === 'gantt') closeCollapseMenu();
+      const doneCount = state.groups.filter(isDoneGroup).length;
+      const de = document.getElementById('btnDoneExpand');
+      const dc = document.getElementById('btnDoneCollapse');
+      if(de && dc){
+        de.textContent = '완료 ' + doneCount + '개 그룹 펼치기';
+        dc.textContent = '완료 ' + doneCount + '개 그룹 접기';
+        // 완료 그룹이 없으면 고를 수 없게 둡니다.
+        de.disabled = doneCount === 0;
+        dc.disabled = doneCount === 0;
       }
     }
   }
@@ -1201,6 +1216,29 @@
     renderTabs();
     renderActiveView();
     renderFilterBar();
+  }
+
+  // 전체 펼치기·접기. g.collapsed 는 화면 설정이 아니라 데이터라
+  // 저장·동기화가 함께 일어납니다(개별 ▶ 버튼과 같은 동작).
+  function setAllCollapsed(collapsed){
+    state.groups.forEach(function(g){ g.collapsed = collapsed; });
+    gridShowDone = !collapsed;
+    doneOverride.clear();
+    saveViewPrefs();
+    closeCollapseMenu();
+    fullRender();
+  }
+  // 완료 그룹만. 표시 설정이라 데이터를 건드리지 않습니다.
+  function setDoneExpanded(expanded){
+    gridShowDone = expanded;
+    doneOverride.clear();
+    saveViewPrefs();
+    closeCollapseMenu();
+    refreshViews();
+  }
+  function closeCollapseMenu(){
+    const m = document.getElementById('collapseMenu');
+    if(m) m.classList.add('hidden');
   }
 
   // 보기 설정만 바뀐 경우. 데이터를 저장하거나 동기화하지 않습니다.
@@ -2624,12 +2662,26 @@
     saveViewPrefs();
     refreshViews();
   });
-  document.getElementById('btnGridDoneToggle').addEventListener('click', function(){
-    gridShowDone = !gridShowDone;
-    doneOverride.clear();
-    saveViewPrefs();
-    refreshViews();
-  });
+  (function(){
+    const toggle = document.getElementById('btnCollapseMenu');
+    const panel = document.getElementById('collapseMenu');
+    toggle.addEventListener('click', function(e){
+      e.stopPropagation();
+      panel.classList.toggle('hidden');
+    });
+    document.addEventListener('click', function(e){
+      if(panel.classList.contains('hidden')) return;
+      if(panel.contains(e.target) || toggle.contains(e.target)) return;
+      closeCollapseMenu();
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key === 'Escape') closeCollapseMenu();
+    });
+  })();
+  document.getElementById('btnAllExpand').addEventListener('click', function(){ setAllCollapsed(false); });
+  document.getElementById('btnAllCollapse').addEventListener('click', function(){ setAllCollapsed(true); });
+  document.getElementById('btnDoneExpand').addEventListener('click', function(){ setDoneExpanded(true); });
+  document.getElementById('btnDoneCollapse').addEventListener('click', function(){ setDoneExpanded(false); });
   document.getElementById('btnPrint').addEventListener('click', function(){ window.print(); });
   document.getElementById('btnClearAll').addEventListener('click', function(){
     if(confirm('모든 WBS 데이터를 삭제할까요? 이 작업은 되돌릴 수 없습니다.')){

@@ -2497,6 +2497,17 @@
     document.querySelectorAll('#wbsBody tr[draggable]').forEach(function(tr){ tr.draggable = true; });
   });
 
+  // Close a modal-overlay only when both the mousedown AND the click landed on the
+  // backdrop itself — otherwise dragging to select text inside the modal (e.g. the
+  // sync URL field) and releasing the mouse past the modal's edge would close it.
+  function wireOverlayClickToClose(overlay){
+    let downOnOverlay = false;
+    overlay.addEventListener('mousedown', function(e){ downOnOverlay = (e.target === overlay); });
+    overlay.addEventListener('click', function(e){
+      if(e.target === overlay && downOnOverlay) overlay.classList.add('hidden');
+    });
+  }
+
   document.getElementById('btnAddGroup').addEventListener('click', function(){
     const g = makeGroup();
     g.tasks.push(makeTask());
@@ -2519,9 +2530,7 @@
   document.getElementById('hdClose').addEventListener('click', function(){
     document.getElementById('holidayModal').classList.add('hidden');
   });
-  document.getElementById('holidayModal').addEventListener('click', function(e){
-    if(e.target.id==='holidayModal') e.currentTarget.classList.add('hidden');
-  });
+  wireOverlayClickToClose(document.getElementById('holidayModal'));
   function addHoliday(){
     const dateEl = document.getElementById('hdDate');
     const nameEl = document.getElementById('hdName');
@@ -2565,9 +2574,7 @@
   document.getElementById('syncModalClose').addEventListener('click', function(){
     document.getElementById('syncModal').classList.add('hidden');
   });
-  document.getElementById('syncModal').addEventListener('click', function(e){
-    if(e.target.id==='syncModal') e.currentTarget.classList.add('hidden');
-  });
+  wireOverlayClickToClose(document.getElementById('syncModal'));
   document.getElementById('syncUrlSaveBtn').addEventListener('click', async function(){
     const val = document.getElementById('syncUrlInput').value.trim();
     persistSyncUrl(val);

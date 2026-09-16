@@ -108,6 +108,7 @@
   .filter-panel .chip-btn{flex:0 0 58px; padding:4px 2px; text-align:center;}
   .filter-panel.hidden{display:none;}
   .filter-panel-row{display:flex; align-items:center; gap:8px;}
+  .filter-range{font-size:12.5px; font-weight:600; color:var(--text); white-space:nowrap;}
 
   /* 화면 탭 */
   .tabs{display:flex; gap:2px; margin-bottom:14px; border-bottom:1px solid var(--border);}
@@ -450,8 +451,9 @@
         </button>
         <div class="filter-panel hidden" id="filterPanel">
           <div class="filter-panel-row">
-            <span class="filter-label">기준 연도</span>
+            <span class="filter-label">조회기간</span>
             <select class="filter-year" id="filterYear"></select>
+            <span class="filter-range" id="filterRange"></span>
           </div>
           <div class="filter-chips" id="filterRow1"></div>
           <div class="filter-chips" id="filterRow2"></div>
@@ -1457,6 +1459,11 @@
     const r = periodRange();
     return r ? fmtDisplay(r.from) + ' ~ ' + fmtDisplay(r.to) : '전체 기간';
   }
+  // 팝업 안에 넣을 짧은 형태. 요일 없이 날짜만 보여 줍니다.
+  function periodRangeText(){
+    const r = periodRange();
+    return r ? r.from.replace(/-/g, '.') + ' ~ ' + r.to.replace(/-/g, '.') : '전체 기간';
+  }
 
   // 업무 기간이 조회기간과 조금이라도 겹치면 보여 줍니다.
   // 날짜가 비어 있는 업무는 걸러내지 않습니다(입력 중일 수 있어서).
@@ -1520,7 +1527,7 @@
     else if(key === 'lastYear') periodFilter = {mode:'year', year:now - 1};
     else periodFilter = {mode:key, year:periodFilter.year};
     saveViewPrefs();
-    closeFilterPanel();
+    // 팝업을 닫지 않습니다. 닫으면 상단에 바뀐 기간이 표시되는 걸 볼 수 없습니다.
     refreshViews();
   }
   function closeFilterPanel(){
@@ -1576,6 +1583,9 @@
     fillRow('filterRow2', PERIOD_CHIPS.slice(5));      // 1~4분기
     fillRow('filterRow3', months.slice(0, 6));         // 1~6월
     fillRow('filterRow4', months.slice(6));            // 7~12월
+
+    const range = document.getElementById('filterRange');
+    if(range) range.textContent = periodRangeText();
 
     const info = document.getElementById('filterInfo');
     if(info){
@@ -3077,6 +3087,9 @@
     });
     document.addEventListener('click', function(e){
       if(panel.classList.contains('hidden')) return;
+      // 칩을 누르면 목록을 다시 그리므로 e.target 이 DOM에서 빠집니다.
+      // 그러면 panel.contains() 가 false 가 되어 팝업이 닫혀 버립니다.
+      if(!document.contains(e.target)) return;
       if(panel.contains(e.target) || toggle.contains(e.target)) return;
       closeFilterPanel();
     });

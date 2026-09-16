@@ -823,11 +823,19 @@
   // 서버(Code.gs)의 스크립트 속성 ADMIN_KEY 가 설정돼 있으면 쓰기에 열쇠가 필요합니다.
   // 화면 잠금은 실수 방지용이고, 실제 차단은 서버가 합니다.
   const ADMIN_KEY_STORE = 'wbs_admin_key_v1';
+  const AUTH_REQUIRED_STORE = 'wbs_auth_required_v1';
   let adminKey = '';
   let authRequired = false;   // 서버가 열쇠를 요구하는가 (GET 응답으로 받음)
 
   function loadAdminKey(){
     try{ adminKey = localStorage.getItem(ADMIN_KEY_STORE) || ''; }catch(e){ adminKey = ''; }
+    // 서버에 못 물어보는 상황(오프라인·주소 오류)에서도 마지막으로 알던 상태를 유지합니다.
+    // 이게 없으면 연결이 끊긴 순간 조회 전용이 풀려 버립니다.
+    try{ authRequired = localStorage.getItem(AUTH_REQUIRED_STORE) === '1'; }catch(e){ authRequired = false; }
+  }
+  function setAuthRequired(v){
+    authRequired = !!v;
+    try{ localStorage.setItem(AUTH_REQUIRED_STORE, authRequired ? '1' : '0'); }catch(e){}
   }
   function saveAdminKey(){
     try{
@@ -871,6 +879,22 @@
     const off = document.getElementById('btnAdminOff');
     if(on) on.style.display = adminKey ? 'none' : '';
     if(off) off.style.display = adminKey ? '' : 'none';
+    renderSyncMenu();
+  }
+
+  // 동기화 설정은 관리자만 만지게 합니다. 다만 연결이 없거나 끊겨 있으면
+  // 담당자도 주소를 고칠 수 있어야 하므로 그때는 열어 둡니다.
+  // (조회 전용인지 아닌지는 서버에 물어봐야 아는데, 물어보려면 주소가 필요합니다)
+  function renderSyncMenu(){
+    const btn = document.getElementById('btnSyncSettings');
+    if(!btn) return;
+    const broken = !syncUrl || syncBlocked || syncStatus === 'error';
+    const show = canEdit() || broken;
+    btn.style.display = show ? '' : 'none';
+    if(!show){
+      const m = document.getElementById('syncModal');
+      if(m) m.classList.add('hidden');
+    }
   }
 
   async function enterAdminMode(){
@@ -890,7 +914,7 @@
         return;
       }
       adminKey = k;
-      authRequired = !!r.authRequired;
+      setAuthRequired(r.authRequired);
       saveAdminKey();
       renderAuthUi();
       fullRender();
@@ -906,7 +930,7 @@
   // 열쇠가 바뀌어 서버가 거부하면 조회 전용으로 되돌립니다.
   function dropAdminOnAuthFail(){
     adminKey = '';
-    authRequired = true;
+    setAuthRequired(true);
     saveAdminKey();
     renderAuthUi();
   }
@@ -1064,6 +1088,8 @@
     deptId = DEFAULT_DEPT;
     depts = [{id: DEFAULT_DEPT, name: '기본'}];
     saveDeptPref();
+    // 다른 시트는 열쇠 정책이 다를 수 있으므로 새로 물어봅니다.
+    setAuthRequired(false);
     try{ localStorage.setItem(SYNC_URL_KEY, url); }catch(e){ console.warn('동기화 URL 저장 실패:', e); }
   }
   function nowKST(){ return new Date().toLocaleTimeString('ko-KR'); }
@@ -1086,7 +1112,8 @@
     // 구버전 Code.gs는 depts 를 안 내려줍니다. 그때는 기본 부서 하나로만 동작합니다.
     adoptDepts(data && data.depts, data && data.dept);
     // 구버전은 authRequired 도 안 내려줍니다. 그때는 잠그지 않습니다.
-    authRequired = !!(data && data.authRequired);
+    // 서버 응답이 최신 사실이므로 열쇠를 뺀 경우에도 자동으로 풀립니다.
+    setAuthRequired(data && data.authRequired);
     renderAuthUi();
     return {
       state: clean,
@@ -1197,6 +1224,11 @@
   // 서버를 먼저 다시 읽어보고, 어느 쪽을 남길지 분명히 물어본 뒤에만 덮어씁니다.
   async function requestPush(){
     if(!syncUrl) return;
+    if(!canEdit()){
+      alert('조회 전용 모드에서는 서버에 저장할 수 없습니다.' + String.fromCharCode(10) +
+        '기능모음 → 관리자 모드에서 열쇠를 입력해주세요.');
+      return;
+    }
     if(!syncBlocked){
       clearTimeout(syncTimer);
       await pushRemoteState();
@@ -1256,6 +1288,7 @@
     }
     const statusText = document.getElementById('syncStatusText');
     if(statusText) statusText.textContent = syncUrl ? syncStatusMessage : '등록된 동기화 URL이 없습니다. 이 브라우저에만 저장됩니다.';
+    renderSyncMenu();
   }
 
   function save(){

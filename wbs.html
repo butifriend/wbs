@@ -50,6 +50,14 @@
   button:disabled{opacity:.35; cursor:not-allowed; pointer-events:none;}
   .spacer{flex:1;}
 
+  .dept-wrap{display:inline-flex; align-items:center; gap:6px; flex:0 0 auto;}
+  .dept-label{font-size:12px; font-weight:700; color:var(--sub); white-space:nowrap;}
+  .dept-select{
+    width:auto; flex:0 0 auto; padding:6px 8px; font-size:13px; font-weight:600;
+    border:1px solid var(--border); border-radius:8px; background:var(--panel); color:var(--text);
+  }
+  .dept-select:hover{border-color:var(--accent);}
+
   .menu-wrap{position:relative;}
   .menu-toggle{white-space:nowrap;}
   .menu-panel{
@@ -371,6 +379,10 @@
   <p class="desc">시작일과 M/D(공수)를 입력하면 대한민국 공휴일과 주말을 제외한 영업일 기준으로 종료일이 자동 계산됩니다.</p>
 
   <div class="toolbar no-print">
+    <label class="dept-wrap" id="deptWrap" style="display:none;">
+      <span class="dept-label">부서</span>
+      <select class="dept-select" id="deptSelect"></select>
+    </label>
     <div class="spacer"></div>
     <button class="primary" id="btnAddGroup">+ 그룹 추가</button>
     <button class="primary" id="btnSaveNow" title="지금 바로 동기화 서버에 올립니다. (입력 내용은 칸을 벗어날 때 자동으로 반영·저장됩니다)">저장</button>
@@ -378,6 +390,12 @@
     <div class="menu-wrap" id="menuWrap">
       <button id="btnMenuToggle" class="menu-toggle">기능모음 ▾</button>
       <div class="menu-panel hidden" id="menuPanel">
+        <div class="menu-group" id="deptMenuGroup" style="display:none;">
+          <div class="menu-label">부서</div>
+          <button id="btnDeptAdd">부서 추가</button>
+          <button id="btnDeptRename">부서 이름 변경</button>
+          <button class="danger" id="btnDeptRemove">부서 목록에서 제거</button>
+        </div>
         <div class="menu-group">
           <div class="menu-label">설정</div>
           <button id="btnHolidays">공휴일 관리</button>
@@ -786,6 +804,126 @@
     state = { groups: [g1, g2] };
   }
 
+  /* ---------------- 부서 (동기화 시트별 분리) ---------------- */
+  // 부서 목록은 구글 시트의 _Depts 시트에 있고, 선택한 부서만 각자 브라우저에 기억합니다.
+  // 부서마다 데이터 시트와 리비전이 따로라 충돌 감지도 부서별로 동작합니다.
+  const DEPT_KEY = 'wbs_dept_v1';
+  const DEFAULT_DEPT = 'default';
+  let deptId = DEFAULT_DEPT;
+  let depts = [{id: DEFAULT_DEPT, name: '기본'}];
+
+  function loadDeptPref(){
+    try{ deptId = localStorage.getItem(DEPT_KEY) || DEFAULT_DEPT; }catch(e){ deptId = DEFAULT_DEPT; }
+  }
+  function saveDeptPref(){
+    try{ localStorage.setItem(DEPT_KEY, deptId); }catch(e){}
+  }
+  function deptName(id){
+    for(let i = 0; i < depts.length; i++) if(depts[i].id === id) return depts[i].name;
+    return id;
+  }
+  // 로컬 보관도 부서별로 나눠 둡니다. 부서를 바꿔도 서로 덮어쓰지 않습니다.
+  function deptDataKey(){
+    return (deptId && deptId !== DEFAULT_DEPT) ? STORAGE_KEY + '__' + deptId : STORAGE_KEY;
+  }
+
+  function adoptDepts(list, serverDept){
+    if(!Array.isArray(list)) return;
+    const clean = list
+      .filter(function(d){ return d && typeof d.id === 'string' && d.id; })
+      .map(function(d){ return {id: d.id, name: (typeof d.name === 'string' && d.name) ? d.name : d.id}; });
+    if(!clean.length) return;
+    depts = clean;
+    // 고른 부서가 목록에서 사라졌으면 서버가 돌려준 부서를 따릅니다.
+    if(typeof serverDept === 'string' && serverDept && serverDept !== deptId){
+      deptId = serverDept;
+      saveDeptPref();
+    }
+    renderDeptSelect();
+  }
+
+  function renderDeptSelect(){
+    const wrap = document.getElementById('deptWrap');
+    const grp = document.getElementById('deptMenuGroup');
+    const sel = document.getElementById('deptSelect');
+    // 부서는 구글 시트에 사는 개념이라 동기화가 연결돼 있을 때만 씁니다.
+    const on = !!syncUrl;
+    if(wrap) wrap.style.display = on ? '' : 'none';
+    if(grp) grp.style.display = on ? '' : 'none';
+    if(!sel || !on) return;
+    sel.innerHTML = '';
+    depts.forEach(function(d){
+      sel.appendChild(el('option',
+        Object.assign({value: d.id}, d.id === deptId ? {selected: 'selected'} : {}),
+        [d.name]));
+    });
+  }
+
+  async function switchDept(id){
+    if(!id || id === deptId){ renderDeptSelect(); return; }
+    // 이전 부서로 가려던 저장이 남아 있으면 먼저 보내고 바꿉니다.
+    if(syncTimer){ clearTimeout(syncTimer); syncTimer = null; await pushRemoteState(); }
+    deptId = id;
+    saveDeptPref();
+    remoteRev = null;
+    remoteUpdatedAt = '';
+    syncBlocked = false;
+    // 부서가 다르면 그룹 id 체계도 다르므로 접기 상태를 비웁니다.
+    collapsedIds = new Set();
+    doneOverride.clear();
+    saveViewPrefs();
+    await initState();
+    suppressRemotePush = true;
+    try{ fullRender(); } finally { suppressRemotePush = false; }
+    renderSyncStatus();
+    renderDeptSelect();
+  }
+
+  async function deptAction(body){
+    if(!syncUrl) throw new Error('동기화 연결이 없습니다');
+    const res = await fetch(syncUrl, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify(body)
+    });
+    let r = {};
+    try{ r = await res.json(); }catch(e){}
+    if(!res.ok || r.ok === false) throw new Error(r.error || ('HTTP ' + res.status));
+    return r;
+  }
+
+  async function addDept(){
+    const name = (prompt('추가할 부서 이름을 입력하세요.') || '').trim();
+    if(!name) return;
+    try{
+      const r = await deptAction({_action: 'createDept', _name: name});
+      if(Array.isArray(r.depts)) depts = r.depts;
+      if(r.dept) await switchDept(r.dept);
+      else renderDeptSelect();
+    }catch(e){ alert('부서 추가에 실패했습니다: ' + e.message); }
+  }
+  async function renameDeptPrompt(){
+    const cur = deptName(deptId);
+    const name = (prompt('"' + cur + '" 부서의 새 이름을 입력하세요.', cur) || '').trim();
+    if(!name || name === cur) return;
+    try{
+      const r = await deptAction({_action: 'renameDept', _dept: deptId, _name: name});
+      if(Array.isArray(r.depts)) depts = r.depts;
+      renderDeptSelect();
+    }catch(e){ alert('이름 변경에 실패했습니다: ' + e.message); }
+  }
+  async function removeDeptPrompt(){
+    if(depts.length <= 1){ alert('부서가 하나뿐이라 제거할 수 없습니다.'); return; }
+    const cur = deptName(deptId);
+    if(!confirm('"' + cur + '" 부서를 목록에서 제거할까요?\n\n' +
+      '데이터 시트는 구글 시트에 그대로 남습니다. 목록에서만 빠지므로 필요하면 되살릴 수 있습니다.')) return;
+    try{
+      const r = await deptAction({_action: 'removeDept', _dept: deptId});
+      if(Array.isArray(r.depts)) depts = r.depts;
+      await switchDept(depts[0].id);
+    }catch(e){ alert('제거에 실패했습니다: ' + e.message); }
+  }
+
   /* ---------------- Google Sheets sync (optional) ---------------- */
   const SYNC_URL_KEY = 'wbs_sync_url_v1';
   let syncUrl = '';
@@ -815,6 +953,10 @@
     remoteUpdatedAt = '';
     syncBlocked = false;
     conflictSupported = true;
+    // 연결이 바뀌면 그쪽 시트의 부서 목록을 새로 받아야 합니다.
+    deptId = DEFAULT_DEPT;
+    depts = [{id: DEFAULT_DEPT, name: '기본'}];
+    saveDeptPref();
     try{ localStorage.setItem(SYNC_URL_KEY, url); }catch(e){ console.warn('동기화 URL 저장 실패:', e); }
   }
   function nowKST(){ return new Date().toLocaleTimeString('ko-KR'); }
@@ -824,12 +966,18 @@
     return isNaN(d.getTime()) ? String(s) : d.toLocaleString('ko-KR');
   }
 
+  function syncUrlWithDept(){
+    return syncUrl + (syncUrl.indexOf('?') === -1 ? '?' : '&') + 'dept=' + encodeURIComponent(deptId);
+  }
+
   async function fetchRemoteState(){
-    const res = await fetch(syncUrl, {method:'GET', cache:'no-store'});
+    const res = await fetch(syncUrlWithDept(), {method:'GET', cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
     const clean = sanitizeState(data);
     if(!clean) throw new Error('올바른 데이터 형식이 아닙니다');
+    // 구버전 Code.gs는 depts 를 안 내려줍니다. 그때는 기본 부서 하나로만 동작합니다.
+    adoptDepts(data && data.depts, data && data.dept);
     return {
       state: clean,
       rev: (data && typeof data.rev === 'number') ? data.rev : null,
@@ -895,7 +1043,7 @@
     if(syncBlocked && !force) return false;
     syncStatus = 'syncing'; syncStatusMessage = '동기화 중...'; renderSyncStatus();
     try{
-      const payload = Object.assign({}, state, {_baseRev: remoteRev, _force: force});
+      const payload = Object.assign({}, state, {_dept: deptId, _baseRev: remoteRev, _force: force});
       const res = await fetch(syncUrl, {
         method:'POST',
         headers:{'Content-Type':'text/plain;charset=utf-8'},
@@ -995,13 +1143,13 @@
   }
 
   function save(){
-    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.warn('WBS 저장 실패:', e); }
+    try{ localStorage.setItem(deptDataKey(), JSON.stringify(state)); }catch(e){ console.warn('WBS 저장 실패:', e); }
     debouncedRemoteSync();
   }
-  const BROKEN_KEY = STORAGE_KEY + '_broken';
+  function brokenKey(){ return deptDataKey() + '_broken'; }
   function load(){
     let raw = null;
-    try{ raw = localStorage.getItem(STORAGE_KEY); }catch(e){ console.warn('WBS 불러오기 실패:', e); }
+    try{ raw = localStorage.getItem(deptDataKey()); }catch(e){ console.warn('WBS 불러오기 실패:', e); }
     if(raw){
       let parsed = null;
       try{ parsed = JSON.parse(raw); }catch(e){ console.warn('저장된 WBS 데이터를 해석하지 못했습니다:', e); }
@@ -1009,8 +1157,8 @@
       if(clean){ state = clean; return; }
       // 형태가 깨진 데이터를 시드 데이터로 덮어쓰기 전에 원본을 따로 보관합니다.
       // (localStorage의 wbs_data_v1_broken 키에서 꺼내볼 수 있습니다)
-      console.warn('저장된 WBS 데이터의 형식이 올바르지 않아 기본 데이터로 시작합니다. 원본은 '+BROKEN_KEY+' 에 보관했습니다.');
-      try{ localStorage.setItem(BROKEN_KEY, raw); }catch(e){}
+      console.warn('저장된 WBS 데이터의 형식이 올바르지 않아 기본 데이터로 시작합니다. 원본은 '+brokenKey()+' 에 보관했습니다.');
+      try{ localStorage.setItem(brokenKey(), raw); }catch(e){}
     }
     seedData();
   }
@@ -2554,6 +2702,12 @@
     fullRender();
     if(syncUrl) requestPush();
   });
+  document.getElementById('deptSelect').addEventListener('change', function(e){
+    switchDept(e.target.value);
+  });
+  document.getElementById('btnDeptAdd').addEventListener('click', addDept);
+  document.getElementById('btnDeptRename').addEventListener('click', renameDeptPrompt);
+  document.getElementById('btnDeptRemove').addEventListener('click', removeDeptPrompt);
   document.getElementById('btnHolidays').addEventListener('click', function(){
     renderHolidayList();
     document.getElementById('holidayModal').classList.remove('hidden');
@@ -2741,6 +2895,7 @@
   /* ---------------- Init ---------------- */
   async function initState(){
     loadSyncUrl();
+    renderDeptSelect();
     if(syncUrl){
       syncStatus = 'syncing'; syncStatusMessage = '동기화 서버에서 불러오는 중...'; renderSyncStatus();
       try{
@@ -2763,14 +2918,19 @@
     }
     load();
   }
+
+  // 부서를 처음 만들면 시트가 비어 있습니다. 그때 시드(예시) 데이터를 밀어 넣으면
+  // 다른 부서 화면에 예시가 섞여 버리므로, 동기화가 연결된 경우에는 빈 상태로 둡니다.
   loadHolidayStorage();
   loadGanttPref();
   loadViewPrefs();
+  loadDeptPref();
   initState().then(function(){
     // 방금 서버에서 받아온 내용을 그대로 되돌려 올리지 않도록 첫 렌더는 업로드를 막습니다.
     suppressRemotePush = true;
     try{ fullRender(); } finally { suppressRemotePush = false; }
     renderSyncStatus();
+    renderDeptSelect();
   });
 })();
 </script>

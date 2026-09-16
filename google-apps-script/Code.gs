@@ -1,10 +1,10 @@
 /**
- * WBS 구글 시트 동기화 백엔드.
+ * WBS 구글 시트 동기화 백엔드 (부서별 시트 분리)
  *
  * 사용법:
  * 1. 구글 시트를 새로 만든다.
  * 2. 확장 프로그램 > Apps Script 메뉴를 열고, 기본 코드를 지운 뒤 이 파일 내용을 전부 붙여넣는다.
- * 3. 저장 후 배포 > 새 배포 > 유형: 웹 앱 선택.
+ * 3. 저장 후 배포 > 새 배포 > (톱니바퀴) 유형: 웹 앱 선택.
  *    - 실행 계정: 나
  *    - 액세스 권한이 있는 사용자: 전체
  * 4. 배포 후 나오는 웹 앱 URL(.../exec 로 끝남)을 복사한다.
@@ -14,34 +14,112 @@
  * 배포 > 배포 관리 > (연필 아이콘) > 버전: 새 버전 > 배포 를 누르면
  * URL은 그대로 유지한 채 갱신된다.
  *
- * 시트 "Data" 탭에 다음을 저장한다.
- *   A1 : WBS 전체 JSON 문자열 (그룹/업무 구조를 그대로 유지하기 위해 통째로 보관)
- *   B1 : 마지막 저장 시각
- *   C1 : 리비전 번호 (저장할 때마다 1씩 증가)
+ * 시트 구성
+ *   _Depts        부서 목록 (숨김 시트). A열 id, B열 이름.
+ *   Data          "기본" 부서의 데이터 시트 (기존 시트를 그대로 쓴다)
+ *   Data_<id>     그 외 부서의 데이터 시트
+ *
+ * 각 데이터 시트의 첫 줄
+ *   A1  WBS 전체 JSON 문자열 (그룹/업무 구조를 그대로 유지하기 위해 통째로 보관)
+ *   B1  마지막 저장 시각
+ *   C1  리비전 번호 (저장할 때마다 1씩 증가)
  *
  * C1의 리비전이 동시 편집 충돌 감지에 쓰인다. 클라이언트는 마지막으로 읽은 리비전을
  * _baseRev로 함께 보내고, 그 사이 다른 사람이 저장해 리비전이 올라갔으면
- * 덮어쓰지 않고 conflict 응답으로 현재 서버 내용을 돌려준다.
+ * 덮어쓰지 않고 conflict 응답으로 현재 서버 내용을 돌려준다. 리비전은 부서마다 따로다.
+ *
+ * API
+ *   GET  ?dept=<id>            그 부서의 데이터 + rev + updatedAt + 부서 목록
+ *   GET  ?action=depts         부서 목록만
+ *   POST {..state, _dept, _baseRev, _force}      데이터 저장
+ *   POST {_action:'createDept', _name}           부서 추가
+ *   POST {_action:'renameDept', _dept, _name}    부서 이름 변경
+ *   POST {_action:'removeDept', _dept}           목록에서 제거 (시트와 데이터는 남긴다)
  */
 
-var SHEET_NAME = 'Data';
+var DATA_SHEET = 'Data';
+var DEPT_SHEET = '_Depts';
+var DEFAULT_DEPT = 'default';
 
-function getSheet_() {
+/* ---------------- 공통 ---------------- */
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/* ---------------- 부서 목록 ---------------- */
+
+// 기존 Data 시트만 있던 상태에서 처음 열리면 그 시트를 "기본" 부서로 등록한다.
+function getDeptRegistry_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAME);
+  var sh = ss.getSheetByName(DEPT_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(DEPT_SHEET);
+    sh.getRange('A1:B1').setValues([['id', 'name']]);
+    sh.getRange('A2:B2').setValues([[DEFAULT_DEPT, '기본']]);
+    sh.setFrozenRows(1);
+    try { sh.hideSheet(); } catch (err) {}
+  }
+  return sh;
+}
+
+function listDepts_() {
+  var sh = getDeptRegistry_();
+  var last = sh.getLastRow();
+  var out = [];
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, 2).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var id = String(vals[i][0] || '').trim();
+      if (!id) continue;
+      out.push({ id: id, name: String(vals[i][1] || id).trim() || id });
+    }
+  }
+  if (!out.length) out.push({ id: DEFAULT_DEPT, name: '기본' });
+  return out;
+}
+
+function deptExists_(id) {
+  var list = listDepts_();
+  for (var i = 0; i < list.length; i++) if (list[i].id === id) return true;
+  return false;
+}
+
+function deptRowIndex_(id) {
+  var sh = getDeptRegistry_();
+  var last = sh.getLastRow();
+  if (last < 2) return -1;
+  var vals = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0] || '').trim() === id) return i + 2;
+  }
+  return -1;
+}
+
+function newDeptId_() {
+  return 'd' + String(Date.now()) + String(Math.floor(Math.random() * 1000));
+}
+
+/* ---------------- 데이터 시트 ---------------- */
+
+function deptSheetName_(id) {
+  return (!id || id === DEFAULT_DEPT) ? DATA_SHEET : DATA_SHEET + '_' + id;
+}
+
+function getSheet_(deptIdArg) {
+  var deptId = deptIdArg || DEFAULT_DEPT;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var name = deptSheetName_(deptId);
+  var sheet = ss.getSheetByName(name);
   if (!sheet) {
-    sheet = ss.insertSheet(SHEET_NAME);
+    sheet = ss.insertSheet(name);
     sheet.getRange('A1').setValue('{"groups":[]}');
     sheet.getRange('A1').setNote('WBS 데이터 (JSON) - 직접 수정하지 마세요');
     sheet.getRange('C1').setValue(0);
     sheet.getRange('C1').setNote('리비전 번호 - 직접 수정하지 마세요');
   }
   return sheet;
-}
-
-function json_(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function readRev_(sheet) {
@@ -70,13 +148,27 @@ function readData_(sheet) {
   return parsed;
 }
 
+/* ---------------- GET ---------------- */
+
 function doGet(e) {
-  var sheet = getSheet_();
+  var p = (e && e.parameter) || {};
+  if (p.action === 'depts') {
+    return json_({ depts: listDepts_() });
+  }
+  var deptId = p.dept || DEFAULT_DEPT;
+  if (!deptExists_(deptId)) deptId = DEFAULT_DEPT;
+
+  var sheet = getSheet_(deptId);
   var payload = readData_(sheet);
   payload.rev = readRev_(sheet);
   payload.updatedAt = readUpdatedAt_(sheet);
+  payload.dept = deptId;
+  // 왕복을 줄이려고 부서 목록을 매번 같이 내려준다.
+  payload.depts = listDepts_();
   return json_(payload);
 }
+
+/* ---------------- POST ---------------- */
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
@@ -86,43 +178,103 @@ function doPost(e) {
     return json_({ ok: false, error: '다른 저장이 진행 중입니다. 잠시 후 다시 시도해주세요.' });
   }
   try {
-    var sheet = getSheet_();
     var parsed = JSON.parse(e.postData.contents);
-    if (!parsed || !Array.isArray(parsed.groups)) {
-      throw new Error('groups 배열이 없는 데이터입니다');
-    }
+    var action = parsed && parsed._action ? String(parsed._action) : '';
 
-    var baseRev = (typeof parsed._baseRev === 'number') ? parsed._baseRev : null;
-    var force = parsed._force === true;
-    var currentRev = readRev_(sheet);
+    if (action === 'createDept') return createDept_(parsed);
+    if (action === 'renameDept') return renameDept_(parsed);
+    if (action === 'removeDept') return removeDept_(parsed);
 
-    // 클라이언트가 마지막으로 읽은 리비전과 서버의 현재 리비전이 다르면
-    // 그 사이 다른 사람이 저장한 것이므로 덮어쓰지 않고 현재 내용을 돌려준다.
-    if (baseRev !== null && !force && baseRev !== currentRev) {
-      return json_({
-        ok: false,
-        conflict: true,
-        rev: currentRev,
-        updatedAt: readUpdatedAt_(sheet),
-        data: readData_(sheet)
-      });
-    }
-
-    delete parsed._baseRev;
-    delete parsed._force;
-
-    var nextRev = currentRev + 1;
-    sheet.getRange('A1').setValue(JSON.stringify(parsed));
-    sheet.getRange('B1').setValue(new Date());
-    sheet.getRange('B1').setNote('마지막 저장 시각');
-    sheet.getRange('C1').setValue(nextRev);
-    sheet.getRange('C1').setNote('리비전 번호 - 직접 수정하지 마세요');
-    SpreadsheetApp.flush();
-
-    return json_({ ok: true, rev: nextRev, updatedAt: readUpdatedAt_(sheet) });
+    return saveData_(parsed);
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   } finally {
     lock.releaseLock();
   }
+}
+
+function createDept_(parsed) {
+  var name = String(parsed._name || '').trim();
+  if (!name) throw new Error('부서 이름이 비어 있습니다');
+  var list = listDepts_();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].name === name) throw new Error('같은 이름의 부서가 이미 있습니다: ' + name);
+  }
+  var id = newDeptId_();
+  var sh = getDeptRegistry_();
+  sh.appendRow([id, name]);
+  getSheet_(id); // 데이터 시트를 미리 만들어 둔다
+  SpreadsheetApp.flush();
+  return json_({ ok: true, dept: id, depts: listDepts_() });
+}
+
+function renameDept_(parsed) {
+  var id = String(parsed._dept || '').trim();
+  var name = String(parsed._name || '').trim();
+  if (!id || !name) throw new Error('부서와 이름이 필요합니다');
+  var row = deptRowIndex_(id);
+  if (row < 0) throw new Error('없는 부서입니다');
+  var list = listDepts_();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].name === name && list[i].id !== id) {
+      throw new Error('같은 이름의 부서가 이미 있습니다: ' + name);
+    }
+  }
+  getDeptRegistry_().getRange(row, 2).setValue(name);
+  SpreadsheetApp.flush();
+  return json_({ ok: true, depts: listDepts_() });
+}
+
+// 목록에서만 뺀다. 데이터 시트는 그대로 남겨서 실수로 지워도 되살릴 수 있게 한다.
+function removeDept_(parsed) {
+  var id = String(parsed._dept || '').trim();
+  if (!id) throw new Error('부서가 필요합니다');
+  if (listDepts_().length <= 1) throw new Error('부서가 하나뿐이라 제거할 수 없습니다');
+  var row = deptRowIndex_(id);
+  if (row < 0) throw new Error('없는 부서입니다');
+  getDeptRegistry_().deleteRow(row);
+  SpreadsheetApp.flush();
+  return json_({ ok: true, depts: listDepts_() });
+}
+
+function saveData_(parsed) {
+  if (!parsed || !Array.isArray(parsed.groups)) {
+    throw new Error('groups 배열이 없는 데이터입니다');
+  }
+  var deptId = String(parsed._dept || DEFAULT_DEPT);
+  if (!deptExists_(deptId)) throw new Error('없는 부서입니다: ' + deptId);
+
+  var sheet = getSheet_(deptId);
+  var baseRev = (typeof parsed._baseRev === 'number') ? parsed._baseRev : null;
+  var force = parsed._force === true;
+  var currentRev = readRev_(sheet);
+
+  // 클라이언트가 마지막으로 읽은 리비전과 서버의 현재 리비전이 다르면
+  // 그 사이 다른 사람이 저장한 것이므로 덮어쓰지 않고 현재 내용을 돌려준다.
+  if (baseRev !== null && !force && baseRev !== currentRev) {
+    return json_({
+      ok: false,
+      conflict: true,
+      dept: deptId,
+      rev: currentRev,
+      updatedAt: readUpdatedAt_(sheet),
+      data: readData_(sheet)
+    });
+  }
+
+  delete parsed._baseRev;
+  delete parsed._force;
+  delete parsed._dept;
+  delete parsed._action;
+  delete parsed._name;
+
+  var nextRev = currentRev + 1;
+  sheet.getRange('A1').setValue(JSON.stringify(parsed));
+  sheet.getRange('B1').setValue(new Date());
+  sheet.getRange('B1').setNote('마지막 저장 시각');
+  sheet.getRange('C1').setValue(nextRev);
+  sheet.getRange('C1').setNote('리비전 번호 - 직접 수정하지 마세요');
+  SpreadsheetApp.flush();
+
+  return json_({ ok: true, dept: deptId, rev: nextRev, updatedAt: readUpdatedAt_(sheet) });
 }

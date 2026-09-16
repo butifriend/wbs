@@ -28,9 +28,22 @@
  * _baseRev로 함께 보내고, 그 사이 다른 사람이 저장해 리비전이 올라갔으면
  * 덮어쓰지 않고 conflict 응답으로 현재 서버 내용을 돌려준다. 리비전은 부서마다 따로다.
  *
+ * 관리자 모드 (쓰기 보호)
+ *   스크립트 속성에 ADMIN_KEY 를 넣어 두면 쓰기(POST)에 그 열쇠를 요구한다.
+ *   읽기(GET)는 그대로 열려 있어 담당자는 URL만으로 조회할 수 있다.
+ *
+ *   설정 방법: Apps Script 편집기 좌측 ⚙ 프로젝트 설정
+ *             > 스크립트 속성 > 속성 추가
+ *             속성 = ADMIN_KEY , 값 = 원하는 열쇠 문자열
+ *
+ *   ADMIN_KEY 를 설정하지 않으면 지금까지처럼 누구나 저장할 수 있다.
+ *   (재배포 직후 열쇠를 넣기 전에 아무도 저장 못 하는 일을 막기 위한 기본값)
+ *   열쇠가 새면 이 속성 값만 바꾸면 된다. 재배포는 필요 없다.
+ *
  * API
- *   GET  ?dept=<id>            그 부서의 데이터 + rev + updatedAt + 부서 목록
+ *   GET  ?dept=<id>            그 부서의 데이터 + rev + updatedAt + 부서 목록 + authRequired
  *   GET  ?action=depts         부서 목록만
+ *   POST {_action:'checkKey', _key}              열쇠 확인만 (저장 안 함)
  *   POST {..state, _dept, _baseRev, _force}      데이터 저장
  *   POST {_action:'createDept', _name}           부서 추가
  *   POST {_action:'renameDept', _dept, _name}    부서 이름 변경
@@ -46,6 +59,31 @@ var DEFAULT_DEPT = 'default';
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/* ---------------- 관리자 열쇠 ---------------- */
+
+function adminKey_() {
+  try {
+    return PropertiesService.getScriptProperties().getProperty('ADMIN_KEY') || '';
+  } catch (err) {
+    return '';
+  }
+}
+
+// 열쇠를 설정하지 않았으면 잠그지 않는다.
+function keyOk_(parsed) {
+  var key = adminKey_();
+  if (!key) return true;
+  return !!parsed && typeof parsed._key === 'string' && parsed._key === key;
+}
+
+function authFail_() {
+  return json_({
+    ok: false,
+    authRequired: true,
+    error: '조회 전용입니다. 관리자 열쇠가 필요합니다.'
+  });
 }
 
 /* ---------------- 부서 목록 ---------------- */
@@ -153,7 +191,7 @@ function readData_(sheet) {
 function doGet(e) {
   var p = (e && e.parameter) || {};
   if (p.action === 'depts') {
-    return json_({ depts: listDepts_() });
+    return json_({ depts: listDepts_(), authRequired: !!adminKey_() });
   }
   var deptId = p.dept || DEFAULT_DEPT;
   if (!deptExists_(deptId)) deptId = DEFAULT_DEPT;
@@ -165,6 +203,8 @@ function doGet(e) {
   payload.dept = deptId;
   // 왕복을 줄이려고 부서 목록을 매번 같이 내려준다.
   payload.depts = listDepts_();
+  // 화면이 조회 전용으로 시작할지 판단하는 데 쓴다. 열쇠 자체는 내려주지 않는다.
+  payload.authRequired = !!adminKey_();
   return json_(payload);
 }
 
@@ -180,6 +220,18 @@ function doPost(e) {
   try {
     var parsed = JSON.parse(e.postData.contents);
     var action = parsed && parsed._action ? String(parsed._action) : '';
+
+    // 열쇠 확인만 하고 아무것도 바꾸지 않는다. 관리자 모드 진입에 쓴다.
+    if (action === 'checkKey') {
+      return json_({
+        ok: keyOk_(parsed),
+        authRequired: !!adminKey_(),
+        error: keyOk_(parsed) ? '' : '관리자 열쇠가 올바르지 않습니다.'
+      });
+    }
+
+    // 여기부터는 전부 쓰기 작업이라 열쇠가 필요하다.
+    if (!keyOk_(parsed)) return authFail_();
 
     if (action === 'createDept') return createDept_(parsed);
     if (action === 'renameDept') return renameDept_(parsed);
@@ -267,6 +319,7 @@ function saveData_(parsed) {
   delete parsed._dept;
   delete parsed._action;
   delete parsed._name;
+  delete parsed._key;
 
   var nextRev = currentRev + 1;
   sheet.getRange('A1').setValue(JSON.stringify(parsed));

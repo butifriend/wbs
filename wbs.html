@@ -399,7 +399,6 @@
     <div class="spacer"></div>
     <span id="authBadge" class="auth-badge" style="display:none;"></span>
     <button class="primary admin-only" id="btnAddGroup">+ 그룹 추가</button>
-    <button class="primary admin-only" id="btnSaveNow" title="지금 바로 동기화 서버에 올립니다. (입력 내용은 칸을 벗어날 때 자동으로 반영·저장됩니다)">저장</button>
     <span id="syncBadge" class="sync-badge" style="display:none;"></span>
     <div class="menu-wrap" id="menuWrap">
       <button id="btnMenuToggle" class="menu-toggle">기능모음 ▾</button>
@@ -1002,6 +1001,7 @@
     if(syncTimer){ clearTimeout(syncTimer); syncTimer = null; await pushRemoteState(); }
     deptId = id;
     saveDeptPref();
+    loadBaseState();
     remoteRev = null;
     remoteUpdatedAt = '';
     syncBlocked = false;
@@ -1080,6 +1080,218 @@
   let remoteUpdatedAt = '';
   // 구버전 Code.gs가 배포돼 있으면 리비전을 돌려주지 않습니다. 그때는 충돌 감지가 꺼집니다.
   let conflictSupported = true;
+  // 올리는 중에 또 고친 경우를 위한 플래그. 올리기가 겹치면 같은 내용을 두 번 보냅니다.
+  let pushing = false;
+  let pushQueued = false;
+  // 아직 서버로 못 올린 내 변경이 있는가. 주기 조회가 끼어들지 판단하는 데 씁니다.
+  let pendingLocalChange = false;
+  // 병합 결과를 다음 상태 문구에 한 번 실어 보냅니다.
+  let lastMergeNote = '';
+
+  /* ---------------- 동시 편집 자동 병합 ---------------- */
+  // 둘이 같은 부서를 동시에 고치면 예전에는 "어느 쪽을 살릴지" 물어보고 한쪽을
+  // 통째로 버렸습니다. 서로 다른 행을 고쳤는데도 한 사람 작업이 사라지는 게 문제였습니다.
+  // 이제는 세 갈래를 항목·칸 단위로 비교해 합칩니다.
+  //   base   : 서버와 마지막으로 같았던 내용
+  //   mine   : 지금 이 화면
+  //   theirs : 서버에 올라와 있는 내용
+  // base 와 다른 쪽이 '누군가 고친 것'이므로, 서로 다른 칸을 고쳤다면 둘 다 남습니다.
+  const BASE_SUFFIX = '__basesnap';
+  const MERGE_GROUP_FIELDS = ['category','title'];
+  const MERGE_TASK_FIELDS = ['category','detail','assignee','md','start','end','endManual','status'];
+
+  let baseState = null;
+
+  function baseDataKey(){ return deptDataKey() + BASE_SUFFIX; }
+  function cloneState(s){ return JSON.parse(JSON.stringify(s)); }
+
+  // 기준을 브라우저에도 남깁니다. 다음에 열었을 때 서버를 못 읽어도 병합할 수 있습니다.
+  function loadBaseState(){
+    baseState = null;
+    try{
+      const raw = localStorage.getItem(baseDataKey());
+      if(raw) baseState = sanitizeState(JSON.parse(raw));
+    }catch(e){ baseState = null; }
+  }
+  function setBaseState(s){
+    baseState = s ? cloneState(s) : null;
+    try{
+      if(baseState) localStorage.setItem(baseDataKey(), JSON.stringify(baseState));
+      else localStorage.removeItem(baseDataKey());
+    }catch(e){}
+  }
+
+  // 항목이 실제로 달라졌는지 비교합니다. collapsed 는 표시용이라 뺍니다.
+  function itemSig(x){
+    const own = MERGE_TASK_FIELDS.map(function(f){ return x[f]; });
+    if(!x.tasks) return JSON.stringify([x.id].concat(own));
+    return JSON.stringify([x.id,
+      MERGE_GROUP_FIELDS.map(function(f){ return x[f]; }),
+      x.tasks.map(function(t){ return [t.id].concat(MERGE_TASK_FIELDS.map(function(f){ return t[f]; })); })]);
+  }
+  function byId(arr){
+    const m = Object.create(null);
+    (arr||[]).forEach(function(x){ if(x && x.id) m[x.id] = x; });
+    return m;
+  }
+  function idsOf(arr){ return (arr||[]).map(function(x){ return x.id; }); }
+
+  function mergeFields(base, mine, theirs, fields, stats){
+    const out = {};
+    fields.forEach(function(f){
+      const iChanged = mine[f] !== base[f];
+      const theyChanged = theirs[f] !== base[f];
+      if(iChanged && theyChanged && mine[f] !== theirs[f]){
+        // 같은 칸을 둘이 다르게 고쳤습니다. 방금 친 내 값을 남기고 그 사실을 알립니다.
+        out[f] = mine[f];
+        stats.collisions++;
+      } else {
+        out[f] = iChanged ? mine[f] : theirs[f];
+      }
+    });
+    return out;
+  }
+
+  function mergeTask(base, mine, theirs, stats){
+    const t = mergeFields(base || theirs, mine, theirs, MERGE_TASK_FIELDS, stats);
+    t.id = mine.id;
+    return t;
+  }
+
+  function mergeGroup(base, mine, theirs, stats){
+    const g = mergeFields(base || theirs, mine, theirs, MERGE_GROUP_FIELDS, stats);
+    g.id = mine.id;
+    g.collapsed = mine.collapsed === true;   // 표시용이라 병합하지 않습니다
+    g.tasks = mergeList(base ? base.tasks : null, mine.tasks, theirs.tasks, mergeTask, stats, MERGE_TASK_FIELDS);
+    return g;
+  }
+
+  // 순서 합치기. 기준 목록에 없는 항목은 상대 목록에서 바로 앞에 있던 항목 뒤에 끼웁니다.
+  function mergeOrder(primary, secondary, keep){
+    const out = primary.filter(function(id){ return keep[id]; });
+    const placed = Object.create(null);
+    out.forEach(function(id){ placed[id] = true; });
+    secondary.forEach(function(id, i){
+      if(!keep[id] || placed[id]) return;
+      let at = 0;
+      for(let j = i - 1; j >= 0; j--){
+        const p = out.indexOf(secondary[j]);
+        if(p !== -1){ at = p + 1; break; }
+      }
+      out.splice(at, 0, id);
+      placed[id] = true;
+    });
+    return out;
+  }
+
+  function fieldsSig(x, fields){
+    return JSON.stringify(fields.map(function(f){ return x[f]; }));
+  }
+
+  function mergeList(baseArr, mineArr, theirsArr, mergeItem, stats, ownFields){
+    const baseMap = byId(baseArr), mineMap = byId(mineArr), theirsMap = byId(theirsArr);
+    const keep = Object.create(null);
+
+    (theirsArr||[]).forEach(function(th){
+      const mn = mineMap[th.id], bs = baseMap[th.id];
+      if(mn){
+        // 그룹은 자기 칸만 셉니다. 하위 업무가 바뀐 건 그 업무 쪽에서 따로 셉니다.
+        if(bs && fieldsSig(bs, ownFields) !== fieldsSig(th, ownFields)) stats.changedByThem++;
+        keep[th.id] = mergeItem(bs, mn, th, stats);
+      } else if(!bs){
+        keep[th.id] = th;              // 상대가 새로 넣은 항목
+        stats.addedByThem++;
+      }
+      // bs 는 있는데 mn 이 없으면 내가 지운 항목입니다. 지운 상태를 유지합니다.
+    });
+
+    (mineArr||[]).forEach(function(mn){
+      if(keep[mn.id] || theirsMap[mn.id]) return;
+      const bs = baseMap[mn.id];
+      if(!bs){ keep[mn.id] = mn; return; }          // 내가 새로 넣은 항목
+      // 상대가 지웠습니다. 내가 손대지 않았으면 삭제를 따르고, 고쳤으면 살립니다.
+      // 지워지는 쪽보다 되살아나는 쪽이 복구하기 쉽기 때문입니다.
+      if(itemSig(bs) === itemSig(mn)){ stats.removedByThem++; return; }
+      keep[mn.id] = mn;
+      stats.revived++;
+    });
+
+    // 내가 순서를 바꿨으면 내 순서를, 아니면 서버 순서를 기준으로 둡니다.
+    const mineKept = idsOf(mineArr).filter(function(id){ return baseMap[id]; });
+    const baseKept = idsOf(baseArr).filter(function(id){ return mineMap[id]; });
+    const iReordered = mineKept.join('|') !== baseKept.join('|');
+    const primary = iReordered ? idsOf(mineArr) : idsOf(theirsArr);
+    const secondary = iReordered ? idsOf(theirsArr) : idsOf(mineArr);
+    return mergeOrder(primary, secondary, keep).map(function(id){ return keep[id]; });
+  }
+
+  function mergeStates(base, mine, theirs){
+    const stats = {collisions:0, addedByThem:0, changedByThem:0, removedByThem:0, revived:0};
+    const merged = {groups: mergeList(base.groups, mine.groups, theirs.groups, mergeGroup, stats, MERGE_GROUP_FIELDS)};
+    return {state: sanitizeState(merged) || merged, stats: stats};
+  }
+
+  function mergeSummary(stats){
+    const bits = [];
+    if(stats.addedByThem) bits.push('추가 '+stats.addedByThem);
+    if(stats.changedByThem) bits.push('수정 '+stats.changedByThem);
+    if(stats.removedByThem) bits.push('삭제 '+stats.removedByThem);
+    if(stats.revived) bits.push('되살림 '+stats.revived);
+    if(!bits.length) return '';
+    let s = '다른 사람 변경 합침 ('+bits.join(' · ')+')';
+    if(stats.collisions) s += ' · 같은 칸 '+stats.collisions+'곳은 내 입력 유지';
+    return s;
+  }
+
+  // 입력 중에 표를 다시 그리면 치던 글자와 포커스가 날아갑니다. 칸을 벗어날 때까지 미룹니다.
+  let pendingRemoteRender = false;
+  let pendingRenderTimer = null;
+  function isTypingInGrid(){
+    const a = document.activeElement;
+    if(!a || !a.closest) return false;
+    if(['INPUT','SELECT','TEXTAREA'].indexOf(a.tagName) === -1) return false;
+    return !!a.closest('#wbsTable');
+  }
+  function renderAfterRemoteChange(){
+    if(isTypingInGrid()){
+      pendingRemoteRender = true;
+      // 칸을 벗어나는 이벤트를 놓쳐도 화면이 낡은 채로 굳지 않도록 다시 확인합니다.
+      clearTimeout(pendingRenderTimer);
+      pendingRenderTimer = setTimeout(renderAfterRemoteChange, 1000);
+      renderSyncStatus();
+      return;
+    }
+    clearTimeout(pendingRenderTimer);
+    pendingRemoteRender = false;
+    suppressRemotePush = true;
+    try{ fullRender(); } finally { suppressRemotePush = false; }
+    renderSyncStatus();
+  }
+
+  // 서버 내용을 받아 지금 화면과 합칩니다. 기준이 없으면 합칠 수 없어 false 를 돌려줍니다.
+  function mergeRemoteInto(theirsState, rev, updatedAt){
+    if(!theirsState || !baseState) return false;
+    const r = mergeStates(baseState, state, theirsState);
+    // 판정을 먼저 끝냅니다. 아래 fullRender 안의 recalcAll 이 같은 객체를 손대므로,
+    // 렌더 뒤에 비교하면 종료일 재계산까지 '내 변경'으로 잡혀 헛저장이 나갑니다.
+    const mergedStr = JSON.stringify(r.state);
+    const changed = mergedStr !== JSON.stringify(state);
+    // 합친 결과가 서버 내용과 다르면 아직 올릴 게 남아 있다는 뜻입니다.
+    const dirty = mergedStr !== JSON.stringify(theirsState);
+    // 내용이 같으면 객체를 갈아끼우지 않습니다. 표의 입력 핸들러는 지금 state 안의
+    // 업무 객체를 붙들고 있어서, 새 객체로 바꾸면 그 뒤 타이핑이 state 밖으로 새어
+    // 나가 조용히 사라집니다. (화면을 다시 그리지 않는 경로라 더더욱 그렇습니다)
+    if(changed) state = r.state;
+    if(typeof rev === 'number') remoteRev = rev;
+    if(typeof updatedAt === 'string' && updatedAt) remoteUpdatedAt = updatedAt;
+    // 서버에 들어 있는 내용이 다음 병합의 기준입니다. 내가 더 얹은 변경은 곧 올라갑니다.
+    setBaseState(theirsState);
+    const note = mergeSummary(r.stats);
+    if(note) lastMergeNote = note;
+    saveLocal();
+    if(changed) renderAfterRemoteChange();
+    return dirty ? 'dirty' : true;
+  }
 
   function loadSyncUrl(){
     try{ syncUrl = localStorage.getItem(SYNC_URL_KEY) || ''; }catch(e){ syncUrl = ''; }
@@ -1163,7 +1375,9 @@
     remoteUpdatedAt = '';
     syncBlocked = false;
     conflictSupported = true;
-    // 연결이 바뀌면 그쪽 시트의 부서 목록을 새로 받아야 합니다.
+    // 연결이 바뀌면 이전 시트의 기준과 주기 조회는 더 이상 의미가 없습니다.
+    setBaseState(null);
+    startPolling();
     deptId = DEFAULT_DEPT;
     depts = [{id: DEFAULT_DEPT, name: '기본'}];
     saveDeptPref();
@@ -1235,14 +1449,15 @@
     syncBlocked = true;
     syncStatus = 'error';
     syncStatusMessage = remote
-      ? '다른 사람이 먼저 저장했습니다 ('+fmtRemoteTime(result.updatedAt)+') · "저장"을 누르면 반영 여부를 선택할 수 있습니다'
-      : '다른 사람이 먼저 저장한 내용을 읽을 수 없습니다 · "저장"을 눌러 다시 시도해주세요';
+      ? '다른 사람이 먼저 저장했습니다 ('+fmtRemoteTime(result.updatedAt)+') · 합칠 기준이 없어 자동으로 합치지 못했습니다 · 이 배지를 눌러주세요'
+      : '다른 사람이 먼저 저장한 내용을 읽을 수 없습니다 · 이 배지를 눌러 다시 시도해주세요';
     renderSyncStatus();
   }
 
   // 서버 데이터를 화면에 반영합니다. 이 과정에서 다시 서버로 올리지는 않습니다.
   function adoptRemote(cleanState, rev, updatedAt){
     state = cleanState;
+    setBaseState(cleanState);
     remoteRev = (typeof rev === 'number') ? rev : null;
     remoteUpdatedAt = updatedAt || '';
     syncBlocked = false;
@@ -1253,31 +1468,73 @@
     renderSyncStatus();
   }
 
+  // 저장 버튼이 없으므로 실패해도 사용자가 다시 누를 길이 없습니다. 스스로 다시 시도합니다.
+  let retryTimer = null;
+  let retryDelay = 5000;
+  function scheduleRetry(){
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(function(){
+      retryDelay = Math.min(retryDelay * 2, 60000);
+      pushRemoteState();
+    }, retryDelay);
+  }
+  function clearRetry(){ clearTimeout(retryTimer); retryTimer = null; retryDelay = 5000; }
+
   async function pushRemoteState(opts){
     if(!syncUrl) return false;
     // 조회 전용이면 애초에 보내지 않습니다. 보내봐야 서버가 거부합니다.
     if(!canEdit()) return false;
     const force = !!(opts && opts.force);
     if(syncBlocked && !force) return false;
-    syncStatus = 'syncing'; syncStatusMessage = '동기화 중...'; renderSyncStatus();
+    // 올리는 중에 또 고쳤습니다. 지금 것이 끝난 뒤 한 번 더 보냅니다.
+    if(pushing){ pushQueued = true; return false; }
+    pushing = true;
     try{
-      const payload = Object.assign({}, state, {_dept: deptId, _key: adminKey, _baseRev: remoteRev, _force: force});
-      const res = await fetch(syncUrl, {
-        method:'POST',
-        headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify(payload)
-      });
+      return await pushOnce(force);
+    } finally {
+      pushing = false;
+      if(pushQueued){ pushQueued = false; debouncedRemoteSync(); }
+    }
+  }
+
+  async function pushOnce(force){
+    // 충돌이 나면 합쳐서 다시 올립니다. 합치는 사이에 또 누가 저장할 수 있어 몇 번 반복합니다.
+    for(let attempt = 0; attempt < 4; attempt++){
+      syncStatus = 'syncing'; syncStatusMessage = '저장 중...'; renderSyncStatus();
+      // 올리는 동안에도 편집은 계속됩니다. 지금 보내는 내용을 따로 떠 두고
+      // 그것만 다음 병합의 기준으로 삼아야 그 사이 편집분이 기준에 섞이지 않습니다.
+      const snapshot = cloneState(state);
       let result = {};
-      try{ result = await res.json(); }catch(e){}
-      if(result && result.conflict){
-        handleConflict(result);
+      try{
+        const payload = Object.assign({}, snapshot, {_dept: deptId, _key: adminKey, _baseRev: remoteRev, _force: force});
+        const res = await fetch(syncUrl, {
+          method:'POST',
+          headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify(payload)
+        });
+        try{ result = await res.json(); }catch(e){ result = {}; }
+        if(result && result.conflict){
+          // 그 사이 다른 사람이 먼저 저장했습니다. 묻지 않고 합친 뒤 다시 올립니다.
+          if(mergeRemoteInto(sanitizeState(result.data), result.rev, result.updatedAt)){
+            force = false;
+            continue;
+          }
+          handleConflict(result);
+          return false;
+        }
+        if(result && result.authRequired && result.ok === false){
+          dropAdminOnAuthFail();
+          throw new Error(result.error || '관리자 열쇠가 필요합니다');
+        }
+        if(!res.ok || result.ok===false) throw new Error(result.error || ('HTTP '+res.status));
+      }catch(e){
+        syncStatus = 'error';
+        syncStatusMessage = '저장하지 못했습니다: '+e.message+' · 연결되면 자동으로 다시 시도합니다';
+        console.warn('원격 동기화 저장 실패:', e);
+        scheduleRetry();
+        renderSyncStatus();
         return false;
       }
-      if(result && result.authRequired && result.ok === false){
-        dropAdminOnAuthFail();
-        throw new Error(result.error || '관리자 열쇠가 필요합니다');
-      }
-      if(!res.ok || result.ok===false) throw new Error(result.error || ('HTTP '+res.status));
       if(typeof result.rev === 'number'){
         remoteRev = result.rev;
         remoteUpdatedAt = typeof result.updatedAt === 'string' ? result.updatedAt : '';
@@ -1286,17 +1543,24 @@
         // 구버전 Code.gs. 저장은 되지만 동시 편집을 막아주지는 못합니다.
         conflictSupported = false;
       }
+      // 서버에 들어간 내용이 곧 다음 병합의 기준입니다.
+      setBaseState(snapshot);
+      pendingLocalChange = false;
+      clearRetry();
       syncBlocked = false;
       syncStatus = 'ok';
-      syncStatusMessage = '연결됨 · 마지막 저장 '+nowKST() +
+      syncStatusMessage = (lastMergeNote ? lastMergeNote + ' · ' : '') + '저장됨 ' + nowKST() +
         (conflictSupported ? '' : ' · 동시편집 감지 미지원(Code.gs 업데이트 필요)');
-    }catch(e){
-      syncStatus = 'error';
-      syncStatusMessage = '동기화 실패: '+e.message;
-      console.warn('원격 동기화 저장 실패:', e);
+      lastMergeNote = '';
+      renderSyncStatus();
+      return true;
     }
+    // 네 번을 연달아 밀렸습니다. 누가 아주 빠르게 저장하고 있다는 뜻이라 잠시 뒤 다시 봅니다.
+    syncStatus = 'error';
+    syncStatusMessage = '다른 사람의 저장이 계속 겹쳐 잠시 후 다시 시도합니다';
+    scheduleRetry();
     renderSyncStatus();
-    return syncStatus === 'ok';
+    return false;
   }
 
   // 사용자가 직접 "저장"/"지금 동기화"를 누른 경우. 업로드가 막힌 상태라면
@@ -1308,11 +1572,7 @@
         '기능모음 → 관리자 모드에서 열쇠를 입력해주세요.');
       return;
     }
-    if(!syncBlocked){
-      clearTimeout(syncTimer);
-      await pushRemoteState();
-      return;
-    }
+    clearTimeout(syncTimer);
     syncStatus = 'syncing'; syncStatusMessage = '서버 상태 확인 중...'; renderSyncStatus();
     let remote = null;
     try{
@@ -1324,6 +1584,15 @@
       alert('동기화 서버에 연결할 수 없어 올리지 못했습니다.\n작업 내용은 이 브라우저에 저장되어 있으니, 연결이 복구된 뒤 다시 시도해주세요.');
       return;
     }
+    // 합칠 기준이 있으면 묻지 않습니다. 양쪽 작업을 모두 남기는 쪽이 항상 낫습니다.
+    if(mergeRemoteInto(remote.state, remote.rev, remote.updatedAt)){
+      syncBlocked = false;
+      clearRetry();
+      await pushRemoteState();
+      return;
+    }
+    // 이 브라우저가 서버를 한 번도 읽은 적이 없으면 무엇이 내 변경인지 알 수 없습니다.
+    // 기준이 없는 이때만 어느 쪽을 남길지 물어봅니다.
     remoteRev = remote.rev;
     remoteUpdatedAt = remote.updatedAt;
     const overwriteServer = await showChoiceModal({
@@ -1343,10 +1612,58 @@
     }
   }
 
+  /* ---- 주기적으로 서버를 살펴 다른 사람의 변경을 미리 받아옵니다 ---- */
+  // 충돌을 나중에 푸는 것보다, 애초에 갈라지지 않게 하는 쪽이 낫습니다.
+  const POLL_MS = 20000;
+  let pollTimer = null;
+
+  function startPolling(){
+    clearInterval(pollTimer);
+    if(!syncUrl) return;
+    pollTimer = setInterval(pollRemote, POLL_MS);
+  }
+
+  // 리비전만 물어봅니다. 전체를 받는 것보다 서버 부담이 훨씬 적습니다.
+  // 구버전 Code.gs 는 action 을 무시하고 전체를 주는데 거기에도 rev 가 있어 그대로 동작합니다.
+  async function fetchRemoteRev(){
+    const res = await fetch(syncUrlWithDept() + '&action=rev', {method:'GET', cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    return (data && typeof data.rev === 'number') ? data.rev : null;
+  }
+
+  async function pollRemote(){
+    if(!syncUrl || document.hidden) return;
+    // 내 변경이 올라가는 중이면 그것부터 끝냅니다. 곧 합쳐질 내용을 미리 당길 이유가 없습니다.
+    if(pushing || pendingLocalChange) return;
+    try{
+      const rev = await fetchRemoteRev();
+      if(rev !== null && rev === remoteRev && !syncBlocked) return;
+      const remote = await fetchRemoteState();
+      const merged = mergeRemoteInto(remote.state, remote.rev, remote.updatedAt);
+      if(!merged){
+        // 기준이 없는 첫 연결입니다. 서버 것을 그대로 받습니다.
+        adoptRemote(remote.state, remote.rev, remote.updatedAt);
+        setBaseState(remote.state);
+        return;
+      }
+      syncBlocked = false;
+      clearRetry();
+      if(merged === 'dirty'){ debouncedRemoteSync(); return; }
+      syncStatus = 'ok';
+      syncStatusMessage = (lastMergeNote || '최신 상태') + ' · ' + nowKST();
+      lastMergeNote = '';
+      renderSyncStatus();
+    }catch(e){
+      // 한 번 실패는 조용히 넘어갑니다. 다음 주기에 다시 봅니다.
+    }
+  }
+
   function debouncedRemoteSync(){
     if(!syncUrl || syncBlocked || suppressRemotePush) return;
+    pendingLocalChange = true;
     clearTimeout(syncTimer);
-    syncTimer = setTimeout(pushRemoteState, 1200);
+    syncTimer = setTimeout(function(){ syncTimer = null; pushRemoteState(); }, 1200);
   }
 
   function renderSyncStatus(){
@@ -1373,8 +1690,11 @@
     renderSyncMenu();
   }
 
-  function save(){
+  function saveLocal(){
     try{ localStorage.setItem(deptDataKey(), JSON.stringify(state)); }catch(e){ console.warn('WBS 저장 실패:', e); }
+  }
+  function save(){
+    saveLocal();
     debouncedRemoteSync();
   }
   function brokenKey(){ return deptDataKey() + '_broken'; }
@@ -2939,12 +3259,8 @@
     }
     fullRender();
   });
-  document.getElementById('btnSaveNow').addEventListener('click', function(){
-    fullRender();
-    if(syncUrl) requestPush();
-  });
   document.getElementById('syncBadge').addEventListener('click', function(){
-    if(syncBlocked && canEdit()) requestPush();
+    if(canEdit() && (syncBlocked || syncStatus === 'error')) requestPush();
   });
   document.getElementById('btnCopyViewerLink').addEventListener('click', copyViewerLink);
   document.getElementById('btnAdminOn').addEventListener('click', enterAdminMode);
@@ -3159,6 +3475,8 @@
   async function initState(){
     loadSyncUrl();
     renderDeptSelect();
+    // 서버를 못 읽어도 지난번 기준이 있으면 나중에 합칠 수 있습니다.
+    loadBaseState();
     if(syncUrl){
       syncStatus = 'syncing'; syncStatusMessage = '동기화 서버에서 불러오는 중...'; renderSyncStatus();
       try{
@@ -3166,6 +3484,7 @@
         state = remote.state;
         remoteRev = remote.rev;
         remoteUpdatedAt = remote.updatedAt;
+        setBaseState(remote.state);
         syncBlocked = false;
         syncStatus = 'ok';
         syncStatusMessage = '연결됨 · 마지막 불러오기 '+nowKST();
@@ -3176,7 +3495,7 @@
         syncStatus = 'error';
         syncStatusMessage = '서버에서 불러오지 못해 이 브라우저의 로컬 데이터를 표시 중입니다. ' +
           '팀 데이터를 보호하기 위해 자동 업로드를 중지했습니다. ' +
-          '연결이 돌아왔으면 "저장"을 누르거나 이 배지를 클릭하세요. ('+e.message+')';
+          '연결이 돌아오면 자동으로 합쳐 올립니다. 바로 시도하려면 이 배지를 클릭하세요. ('+e.message+')';
         console.warn('원격 데이터 불러오기 실패:', e);
       }
     }
@@ -3192,6 +3511,31 @@
   loadViewPrefs();
   loadDeptPref();
   loadAdminKey();
+  // 입력 중이라 미뤄 둔 서버 변경을, 칸을 벗어나는 즉시 화면에 반영합니다.
+  document.getElementById('wbsTable').addEventListener('focusout', function(){
+    if(!pendingRemoteRender) return;
+    setTimeout(function(){
+      if(!pendingRemoteRender || isTypingInGrid()) return;
+      renderAfterRemoteChange();
+    }, 0);
+  });
+
+  // 탭을 다시 보는 순간 남의 변경부터 받아옵니다. 20초를 기다릴 이유가 없습니다.
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden) pollRemote();
+  });
+
+  // 자동 저장이 아직 안 올라간 채로 탭을 닫으면 그 편집이 서버에 없습니다.
+  // 떠나면서 한 번 더 보냅니다. 그 사이 남이 먼저 저장했다면 서버가 리비전으로 막습니다.
+  window.addEventListener('pagehide', function(){
+    if(!syncUrl || !canEdit() || syncBlocked || !pendingLocalChange) return;
+    if(!navigator.sendBeacon) return;
+    try{
+      const payload = Object.assign({}, state, {_dept: deptId, _key: adminKey, _baseRev: remoteRev});
+      navigator.sendBeacon(syncUrl, new Blob([JSON.stringify(payload)], {type:'text/plain;charset=utf-8'}));
+    }catch(e){}
+  });
+
   initState().then(function(){
     // 방금 서버에서 받아온 내용을 그대로 되돌려 올리지 않도록 첫 렌더는 업로드를 막습니다.
     suppressRemotePush = true;
@@ -3199,6 +3543,7 @@
     renderSyncStatus();
     renderDeptSelect();
     renderAuthUi();
+    startPolling();
   });
 })();
 </script>

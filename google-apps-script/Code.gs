@@ -196,6 +196,14 @@ function doGet(e) {
   var deptId = p.dept || DEFAULT_DEPT;
   if (!deptExists_(deptId)) deptId = DEFAULT_DEPT;
 
+  // 화면이 주기적으로 "그새 누가 저장했나"만 물어본다. 전체 데이터를 직렬화하지
+  // 않으므로 훨씬 가볍다. Apps Script 는 하루 실행 시간 총량에 제한이 있어,
+  // 이 구분이 없으면 주기 조회만으로 그 시간을 다 써 버린다.
+  if (p.action === 'rev') {
+    var s = getSheet_(deptId);
+    return json_({ ok: true, rev: readRev_(s), updatedAt: readUpdatedAt_(s), dept: deptId });
+  }
+
   var sheet = getSheet_(deptId);
   var payload = readData_(sheet);
   payload.rev = readRev_(sheet);

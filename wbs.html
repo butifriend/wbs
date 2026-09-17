@@ -1009,10 +1009,22 @@
     collapsedIds = new Set();
     doneOverride.clear();
     saveViewPrefs();
-    await initState();
+
+    // 서버 왕복이 3초쯤 걸립니다. 그동안 이전 부서 내역을 그대로 두면 전환이
+    // 안 된 것처럼 보이므로, 이 브라우저에 남아 있는 그 부서 내역을 먼저 그립니다.
+    // 아직 서버를 못 읽었으니 업로드는 pushHold 로 미뤄 둡니다.
+    const turn = ++deptSeq;
+    state = cachedDeptState();
+    pushHold = !!syncUrl;
+    syncStatus = syncUrl ? 'syncing' : 'idle';
+    syncStatusMessage = syncUrl ? '저장된 내용을 먼저 표시했습니다 · 서버에서 확인 중...' : '';
     suppressRemotePush = true;
     try{ fullRender(); } finally { suppressRemotePush = false; }
     renderSyncStatus();
+    renderDeptSelect();
+
+    await refreshFromServer(turn);
+    if(turn !== deptSeq) return;
     renderDeptSelect();
   }
 
@@ -1080,6 +1092,10 @@
   let remoteUpdatedAt = '';
   // 구버전 Code.gs가 배포돼 있으면 리비전을 돌려주지 않습니다. 그때는 충돌 감지가 꺼집니다.
   let conflictSupported = true;
+  // 서버 내용을 아직 못 받은 동안 업로드만 잠깐 미룹니다. 오류가 아니라 대기라서
+  // syncBlocked 와 달리 배지에 경고로 표시하지 않습니다. 이게 없으면 낡은 캐시가
+  // 팀 시트를 덮어씁니다.
+  let pushHold = false;
   // 올리는 중에 또 고친 경우를 위한 플래그. 올리기가 겹치면 같은 내용을 두 번 보냅니다.
   let pushing = false;
   let pushQueued = false;
@@ -1397,13 +1413,16 @@
   }
 
   async function fetchRemoteState(){
+    // 어느 부서를 물어봤는지 기억해 둡니다. 부서를 바꾼 뒤 늦게 도착한 응답이
+    // 고른 부서를 예전 것으로 되돌려 놓는 일을 막습니다.
+    const asked = deptId;
     const res = await fetch(syncUrlWithDept(), {method:'GET', cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
     const clean = sanitizeState(data);
     if(!clean) throw new Error('올바른 데이터 형식이 아닙니다');
     // 구버전 Code.gs는 depts 를 안 내려줍니다. 그때는 기본 부서 하나로만 동작합니다.
-    adoptDepts(data && data.depts, data && data.dept);
+    adoptDepts(data && data.depts, (asked === deptId) ? (data && data.dept) : null);
     // 구버전은 authRequired 도 안 내려줍니다. 그때는 잠그지 않습니다.
     // 서버 응답이 최신 사실이므로 열쇠를 뺀 경우에도 자동으로 풀립니다.
     setAuthRequired(data && data.authRequired);
@@ -1485,7 +1504,7 @@
     // 조회 전용이면 애초에 보내지 않습니다. 보내봐야 서버가 거부합니다.
     if(!canEdit()) return false;
     const force = !!(opts && opts.force);
-    if(syncBlocked && !force) return false;
+    if((syncBlocked || pushHold) && !force) return false;
     // 올리는 중에 또 고쳤습니다. 지금 것이 끝난 뒤 한 번 더 보냅니다.
     if(pushing){ pushQueued = true; return false; }
     pushing = true;
@@ -1612,6 +1631,47 @@
     }
   }
 
+  // 부서를 빠르게 연달아 바꾸면 이전 부서의 응답이 나중에 도착할 수 있습니다.
+  // 그 응답을 지금 부서에 합쳐 버리면 남의 부서 내용이 섞이고, 그대로 서버에
+  // 올라갑니다. 순번을 달아 두고 뒤늦은 응답은 버립니다.
+  let deptSeq = 0;
+
+  // 화면은 이미 캐시로 그려 둔 상태에서 서버 내용을 받아 반영합니다.
+  // 기다리는 사이에 고친 내용이 있을 수 있어 덮어쓰지 않고 합칩니다.
+  async function refreshFromServer(turn){
+    if(!syncUrl){ pushHold = false; return; }
+    syncStatus = 'syncing'; renderSyncStatus();
+    try{
+      const remote = await fetchRemoteWithRetry();
+      if(turn !== deptSeq) return;          // 그새 다른 부서로 옮겼습니다
+      pushHold = false;
+      syncBlocked = false;
+      const merged = mergeRemoteInto(remote.state, remote.rev, remote.updatedAt);
+      if(!merged){
+        // 이 브라우저가 그 부서를 처음 봅니다. 합칠 기준이 없으니 그대로 받습니다.
+        adoptRemote(remote.state, remote.rev, remote.updatedAt);
+        return;
+      }
+      remoteRev = remote.rev;
+      remoteUpdatedAt = remote.updatedAt;
+      syncStatus = 'ok';
+      syncStatusMessage = lastMergeNote || ('연결됨 · 마지막 불러오기 '+nowKST());
+      lastMergeNote = '';
+      if(merged === 'dirty') debouncedRemoteSync();
+    }catch(e){
+      if(turn !== deptSeq) return;          // 그새 다른 부서로 옮겼습니다
+      // 못 받았습니다. 캐시를 보여 주되 업로드는 계속 막아 둡니다.
+      pushHold = false;
+      syncBlocked = true;
+      syncStatus = 'error';
+      syncStatusMessage = '서버에서 불러오지 못해 이 브라우저에 저장된 내용을 표시 중입니다. ' +
+        '팀 데이터를 보호하기 위해 자동 업로드를 중지했습니다. ' +
+        '연결이 돌아오면 자동으로 합쳐 올립니다. 바로 시도하려면 이 배지를 클릭하세요. ('+e.message+')';
+      console.warn('부서 내용 불러오기 실패:', e);
+    }
+    renderSyncStatus();
+  }
+
   /* ---- 주기적으로 서버를 살펴 다른 사람의 변경을 미리 받아옵니다 ---- */
   // 충돌을 나중에 푸는 것보다, 애초에 갈라지지 않게 하는 쪽이 낫습니다.
   const POLL_MS = 20000;
@@ -1660,7 +1720,7 @@
   }
 
   function debouncedRemoteSync(){
-    if(!syncUrl || syncBlocked || suppressRemotePush) return;
+    if(!syncUrl || syncBlocked || pushHold || suppressRemotePush) return;
     pendingLocalChange = true;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(function(){ syncTimer = null; pushRemoteState(); }, 1200);
@@ -1688,6 +1748,20 @@
     const statusText = document.getElementById('syncStatusText');
     if(statusText) statusText.textContent = syncUrl ? syncStatusMessage : '등록된 동기화 URL이 없습니다. 이 브라우저에만 저장됩니다.';
     renderSyncMenu();
+  }
+
+  // 그 부서를 마지막으로 봤을 때의 내용입니다. 없으면 빈 상태로 둡니다.
+  // load() 처럼 시드(예시) 데이터로 채우면 안 됩니다. 남의 부서 화면에
+  // 예시 업무가 떠 있는 것처럼 보입니다.
+  function cachedDeptState(){
+    try{
+      const raw = localStorage.getItem(deptDataKey());
+      if(raw){
+        const clean = sanitizeState(JSON.parse(raw));
+        if(clean) return clean;
+      }
+    }catch(e){}
+    return { groups: [] };
   }
 
   function saveLocal(){

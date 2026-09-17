@@ -304,6 +304,9 @@
   .sync-badge[data-state=ok]{color:var(--st-done); background:var(--st-done-bg);}
   .sync-badge[data-state=syncing]{color:var(--st-progress); background:var(--st-progress-bg);}
   .sync-badge[data-state=error]{color:var(--danger); background:var(--danger-bg);}
+  /* 막힌 상태를 눌러서 바로 풀 수 있게 합니다. 배지 말고는 빠져나올 단서가 없었습니다. */
+  .sync-badge.actionable{cursor:pointer; border:1px solid currentColor;}
+  .sync-badge.actionable:hover{filter:brightness(.96);}
   .sync-url-input{width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:8px; background:var(--panel); color:var(--text); font:inherit; margin-bottom:8px; box-sizing:border-box;}
   .sync-actions{display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
   .weekend-warn{color:var(--danger);}
@@ -1354,7 +1357,10 @@
       } else {
         badge.style.display = 'inline-flex';
         badge.setAttribute('data-state', syncBlocked ? 'error' : syncStatus);
-        const label = syncBlocked ? '⚠ 업로드 중지됨'
+        // 막힌 상태는 사용자가 직접 풀어야 하므로, 누를 수 있다는 걸 라벨에 드러냅니다.
+        const canFix = syncBlocked && canEdit();
+        badge.classList.toggle('actionable', canFix);
+        const label = syncBlocked ? (canFix ? '⚠ 업로드 중지됨 · 눌러서 해결' : '⚠ 업로드 중지됨')
           : syncStatus==='syncing' ? '☁ 동기화 중'
           : syncStatus==='error' ? '⚠ 동기화 오류'
           : '☁ 동기화됨';
@@ -2937,6 +2943,9 @@
     fullRender();
     if(syncUrl) requestPush();
   });
+  document.getElementById('syncBadge').addEventListener('click', function(){
+    if(syncBlocked && canEdit()) requestPush();
+  });
   document.getElementById('btnCopyViewerLink').addEventListener('click', copyViewerLink);
   document.getElementById('btnAdminOn').addEventListener('click', enterAdminMode);
   document.getElementById('btnAdminOff').addEventListener('click', exitAdminMode);
@@ -3134,13 +3143,26 @@
   });
 
   /* ---------------- Init ---------------- */
+  // Apps Script 는 한동안 쓰지 않으면 첫 요청이 느려 실패할 때가 있습니다.
+  // 한 번 더 시도해서, 콜드스타트 때문에 업로드가 막히는 일을 줄입니다.
+  async function fetchRemoteWithRetry(){
+    try{
+      return await fetchRemoteState();
+    }catch(first){
+      syncStatusMessage = '서버 응답이 없어 다시 시도합니다...';
+      renderSyncStatus();
+      await new Promise(function(r){ setTimeout(r, 2000); });
+      return await fetchRemoteState();
+    }
+  }
+
   async function initState(){
     loadSyncUrl();
     renderDeptSelect();
     if(syncUrl){
       syncStatus = 'syncing'; syncStatusMessage = '동기화 서버에서 불러오는 중...'; renderSyncStatus();
       try{
-        const remote = await fetchRemoteState();
+        const remote = await fetchRemoteWithRetry();
         state = remote.state;
         remoteRev = remote.rev;
         remoteUpdatedAt = remote.updatedAt;
@@ -3153,7 +3175,8 @@
         syncBlocked = true;
         syncStatus = 'error';
         syncStatusMessage = '서버에서 불러오지 못해 이 브라우저의 로컬 데이터를 표시 중입니다. ' +
-          '팀 데이터를 보호하기 위해 자동 업로드를 중지했습니다 ('+e.message+')';
+          '팀 데이터를 보호하기 위해 자동 업로드를 중지했습니다. ' +
+          '연결이 돌아왔으면 "저장"을 누르거나 이 배지를 클릭하세요. ('+e.message+')';
         console.warn('원격 데이터 불러오기 실패:', e);
       }
     }

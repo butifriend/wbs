@@ -2175,9 +2175,21 @@
   function visibleRows(){
     const range = periodRange();
     const all = state.groups.map(function(g, i){ return {g:g, dataIndex:i}; });
-    // 완료된 그룹은 화면에서만 맨 아래로 내립니다.
+    // 완료된 그룹은 화면에서만 맨 아래로 내립니다. 진행 중인 그룹은 손으로
+    // 끌어다 놓은 순서를 지키고, 완료 그룹만 날짜순으로 정리합니다.
+    // 지난 일이라 순서를 직접 매길 이유가 적고, 훑어볼 때는 시간순이 낫습니다.
+    // 편집·드래그는 dataIndex 로 넘어가므로 데이터 순서는 건드리지 않습니다.
+    const doneByDate = all.filter(function(r){ return isDoneGroup(r.g); })
+      .sort(function(a, b){
+        // 날짜가 없는 그룹은 뒤로 보냅니다.
+        const as = a.g._start || '9999-99-99', bs = b.g._start || '9999-99-99';
+        if(as !== bs) return as < bs ? -1 : 1;
+        const ae = a.g._end || '9999-99-99', be = b.g._end || '9999-99-99';
+        if(ae !== be) return ae < be ? -1 : 1;
+        return a.dataIndex - b.dataIndex;
+      });
     const ordered = all.filter(function(r){ return !isDoneGroup(r.g); })
-      .concat(all.filter(function(r){ return isDoneGroup(r.g); }));
+      .concat(doneByDate);
 
     let hiddenGroups = 0, hiddenTasks = 0;
     const rows = [];

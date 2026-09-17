@@ -307,8 +307,6 @@
   /* 막힌 상태를 눌러서 바로 풀 수 있게 합니다. 배지 말고는 빠져나올 단서가 없었습니다. */
   .sync-badge.actionable{cursor:pointer; border:1px solid currentColor;}
   .sync-badge.actionable:hover{filter:brightness(.96);}
-  .sync-url-input{width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:8px; background:var(--panel); color:var(--text); font:inherit; margin-bottom:8px; box-sizing:border-box;}
-  .sync-actions{display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
   .weekend-warn{color:var(--danger);}
 
   select[data-field=status]{font-weight:700; font-size:12px;}
@@ -417,7 +415,6 @@
         <div class="menu-group">
           <div class="menu-label">설정</div>
           <button id="btnHolidays">공휴일 관리</button>
-          <button id="btnSyncSettings">동기화 설정</button>
           <button class="admin-only" id="btnCopyViewerLink">담당자용 링크 복사</button>
         </div>
         <div class="menu-group">
@@ -549,27 +546,6 @@
     <div class="modal-footer">
       <button class="danger small" id="hdReset">기본값으로 초기화</button>
       <button class="small" id="hdClose">닫기</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay hidden" id="syncModal">
-  <div class="modal">
-    <h2>구글 시트 동기화 설정</h2>
-    <p style="font-size:12px; color:var(--sub); line-height:1.6; margin-top:-6px;">
-      Google Apps Script Web App 배포 URL을 등록하면, 이 브라우저에서 편집한 내용이 자동으로 구글 시트에 저장되고
-      페이지를 열 때마다 최신 데이터를 불러옵니다. 같은 URL을 팀원의 브라우저에도 등록하면 서로 최신 데이터를 공유하게 됩니다.
-      비워두면 지금처럼 이 브라우저에만 저장됩니다.
-    </p>
-    <input type="text" id="syncUrlInput" class="sync-url-input" placeholder="https://script.google.com/macros/s/.../exec">
-    <div class="sync-actions">
-      <button class="primary small" id="syncUrlSaveBtn">연결 저장</button>
-      <button class="small" id="syncNowBtn">지금 동기화</button>
-      <button class="danger small" id="syncUrlClearBtn">연결 해제</button>
-    </div>
-    <div id="syncStatusText" style="font-size:12px; color:var(--sub); line-height:1.6;"></div>
-    <div class="modal-footer">
-      <button class="small" id="syncModalClose">닫기</button>
     </div>
   </div>
 </div>
@@ -884,22 +860,6 @@
     const off = document.getElementById('btnAdminOff');
     if(on) on.style.display = adminKey ? 'none' : '';
     if(off) off.style.display = adminKey ? '' : 'none';
-    renderSyncMenu();
-  }
-
-  // 동기화 설정은 관리자만 만지게 합니다. 다만 연결이 없거나 끊겨 있으면
-  // 담당자도 주소를 고칠 수 있어야 하므로 그때는 열어 둡니다.
-  // (조회 전용인지 아닌지는 서버에 물어봐야 아는데, 물어보려면 주소가 필요합니다)
-  function renderSyncMenu(){
-    const btn = document.getElementById('btnSyncSettings');
-    if(!btn) return;
-    const broken = !syncUrl || syncBlocked || syncStatus === 'error';
-    const show = canEdit() || broken;
-    btn.style.display = show ? '' : 'none';
-    if(!show){
-      const m = document.getElementById('syncModal');
-      if(m) m.classList.add('hidden');
-    }
   }
 
   async function enterAdminMode(){
@@ -1357,17 +1317,18 @@
     if(current === given) return;
     if(current && !confirm('이미 등록된 동기화 연결이 있습니다.' + String.fromCharCode(10) +
       '링크에 담긴 새 연결로 바꿀까요?')) return;
-    try{
-      localStorage.setItem(SYNC_URL_KEY, given);
-      // 다른 시트면 부서 목록과 권한 정책이 다르므로 새로 받아옵니다.
-      localStorage.removeItem(DEPT_KEY);
-      localStorage.removeItem(AUTH_REQUIRED_STORE);
-    }catch(e){}
+    // 연결을 세우는 통로가 이 링크 하나뿐이라, 뒷정리도 여기서 다 합니다.
+    persistSyncUrl(given);
+    try{ localStorage.removeItem(AUTH_REQUIRED_STORE); }catch(e){}
   }
 
   // 관리자가 담당자에게 뿌릴 링크를 만듭니다. 열쇠는 절대 담지 않습니다.
   async function copyViewerLink(){
-    if(!syncUrl){ alert('먼저 동기화 설정에서 연결을 등록해주세요.'); return; }
+    if(!syncUrl){
+      alert('이 브라우저에 동기화 연결이 없습니다.' + String.fromCharCode(10) +
+        '관리자 링크를 한 번 연 뒤 다시 시도해주세요.');
+      return;
+    }
     let base = location.href;
     try{
       const u = new URL(location.href);
@@ -1385,6 +1346,19 @@
       prompt('아래 링크를 복사해 사내 채널로 전달하세요.', link);
     }
   }
+  // 부서마다 따로 쌓인 병합 기준을 한 번에 비웁니다.
+  function clearAllBaseSnapshots(){
+    baseState = null;
+    try{
+      const kill = [];
+      for(let i = 0; i < localStorage.length; i++){
+        const k = localStorage.key(i);
+        if(k && k.indexOf(STORAGE_KEY) === 0 && k.indexOf(BASE_SUFFIX) !== -1) kill.push(k);
+      }
+      kill.forEach(function(k){ localStorage.removeItem(k); });
+    }catch(e){}
+  }
+
   function persistSyncUrl(url){
     syncUrl = url;
     remoteRev = null;
@@ -1392,7 +1366,9 @@
     syncBlocked = false;
     conflictSupported = true;
     // 연결이 바뀌면 이전 시트의 기준과 주기 조회는 더 이상 의미가 없습니다.
-    setBaseState(null);
+    // 기준을 남겨 두면 다른 시트 내용을 '내가 고친 것'으로 오해해 그대로 올립니다.
+    // 지금 부서뿐 아니라 모든 부서의 기준을 비웁니다.
+    clearAllBaseSnapshots();
     startPolling();
     deptId = DEFAULT_DEPT;
     depts = [{id: DEFAULT_DEPT, name: '기본'}];
@@ -1730,7 +1706,14 @@
     const badge = document.getElementById('syncBadge');
     if(badge){
       if(!syncUrl){
-        badge.style.display = 'none';
+        // 예전에는 배지를 숨기고 "동기화 설정"에서 안내했습니다. 그 화면이
+        // 없어졌으니 무엇을 해야 하는지는 배지가 말해 줘야 합니다.
+        badge.style.display = 'inline-flex';
+        badge.setAttribute('data-state', 'error');
+        badge.classList.remove('actionable');
+        badge.textContent = '⚠ 연결 안 됨';
+        badge.title = '관리자가 보낸 링크를 한 번 열면 자동으로 연결됩니다. ' +
+          '그때까지 편집한 내용은 이 브라우저에만 저장됩니다.';
       } else {
         badge.style.display = 'inline-flex';
         badge.setAttribute('data-state', syncBlocked ? 'error' : syncStatus);
@@ -1745,9 +1728,6 @@
         badge.title = syncStatusMessage;
       }
     }
-    const statusText = document.getElementById('syncStatusText');
-    if(statusText) statusText.textContent = syncUrl ? syncStatusMessage : '등록된 동기화 URL이 없습니다. 이 브라우저에만 저장됩니다.';
-    renderSyncMenu();
   }
 
   // 그 부서를 마지막으로 봤을 때의 내용입니다. 없으면 빈 상태로 둡니다.
@@ -3386,59 +3366,6 @@
       rebuildHolidays();
       renderHolidayList();
       fullRender();
-    }
-  });
-  document.getElementById('btnSyncSettings').addEventListener('click', function(){
-    document.getElementById('syncUrlInput').value = syncUrl;
-    renderSyncStatus();
-    document.getElementById('syncModal').classList.remove('hidden');
-  });
-  document.getElementById('syncModalClose').addEventListener('click', function(){
-    document.getElementById('syncModal').classList.add('hidden');
-  });
-  wireOverlayClickToClose(document.getElementById('syncModal'));
-  document.getElementById('syncUrlSaveBtn').addEventListener('click', async function(){
-    const val = document.getElementById('syncUrlInput').value.trim();
-    persistSyncUrl(val);
-    if(!val){
-      syncStatus = 'idle'; syncStatusMessage = '';
-      renderSyncStatus();
-      return;
-    }
-    syncStatus = 'syncing'; syncStatusMessage = '연결 확인 중...'; renderSyncStatus();
-    try{
-      const remote = await fetchRemoteState();
-      remoteRev = remote.rev;
-      remoteUpdatedAt = remote.updatedAt;
-      syncBlocked = false;
-      if(remote.state.groups.length > 0){
-        if(confirm('연결된 시트에 이미 데이터가 있습니다. 그 데이터를 불러와서 화면에 표시할까요?\n(취소하면 지금 화면 데이터를 유지합니다)')){
-          adoptRemote(remote.state, remote.rev, remote.updatedAt);
-        }
-      } else if(confirm('연결된 시트가 비어 있습니다. 지금 화면에 보이는 데이터를 시트에 저장할까요?')){
-        await pushRemoteState();
-      }
-      if(syncStatus !== 'error'){
-        syncStatus = 'ok';
-        syncStatusMessage = '연결됨 · '+nowKST();
-      }
-    }catch(e){
-      syncBlocked = true;
-      syncStatus = 'error';
-      syncStatusMessage = '연결 실패: '+e.message;
-    }
-    renderSyncStatus();
-  });
-  document.getElementById('syncNowBtn').addEventListener('click', function(){
-    if(!syncUrl){ alert('먼저 동기화 URL을 등록하고 저장해주세요.'); return; }
-    requestPush();
-  });
-  document.getElementById('syncUrlClearBtn').addEventListener('click', function(){
-    if(confirm('구글 시트 연결을 해제할까요? 이후로는 이 브라우저에만 저장됩니다.')){
-      persistSyncUrl('');
-      document.getElementById('syncUrlInput').value = '';
-      syncStatus = 'idle'; syncStatusMessage = '';
-      renderSyncStatus();
     }
   });
   document.getElementById('btnExportCsv').addEventListener('click', exportCsv);

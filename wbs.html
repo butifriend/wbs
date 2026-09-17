@@ -919,6 +919,21 @@
     return id;
   }
   // 로컬 보관도 부서별로 나눠 둡니다. 부서를 바꿔도 서로 덮어쓰지 않습니다.
+  // 부서 목록은 서버에만 있습니다. 기억해 두지 않으면 첫 응답이 올 때까지
+  // 툴바에 "기본" 한 줄만 떠 있다가 갑자기 바뀝니다.
+  const DEPT_LIST_KEY = 'wbs_depts_v1';
+  function saveDeptList(){
+    try{ localStorage.setItem(DEPT_LIST_KEY, JSON.stringify(depts)); }catch(e){}
+  }
+  function loadDeptList(){
+    try{
+      const raw = localStorage.getItem(DEPT_LIST_KEY);
+      if(!raw) return;
+      const list = JSON.parse(raw);
+      if(Array.isArray(list) && list.length) depts = list;
+    }catch(e){}
+  }
+
   function deptDataKey(){
     return (deptId && deptId !== DEFAULT_DEPT) ? STORAGE_KEY + '__' + deptId : STORAGE_KEY;
   }
@@ -930,6 +945,7 @@
       .map(function(d){ return {id: d.id, name: (typeof d.name === 'string' && d.name) ? d.name : d.id}; });
     if(!clean.length) return;
     depts = clean;
+    saveDeptList();
     // 고른 부서가 목록에서 사라졌으면 서버가 돌려준 부서를 따릅니다.
     if(typeof serverDept === 'string' && serverDept && serverDept !== deptId){
       deptId = serverDept;
@@ -1300,7 +1316,7 @@
     }catch(e){}   // file:// 등 replaceState 가 막힌 환경에서는 그냥 넘어갑니다
   }
 
-  // initState() 보다 먼저 불러서, 첫 로딩부터 이 연결로 동작하게 합니다.
+  // 부팅보다 먼저 불러서, 첫 로딩부터 이 연결로 동작하게 합니다.
   function applySyncLink(){
     let given = '';
     try{ given = new URL(location.href).searchParams.get(SYNC_LINK_PARAM) || ''; }catch(e){}
@@ -1373,6 +1389,7 @@
     deptId = DEFAULT_DEPT;
     depts = [{id: DEFAULT_DEPT, name: '기본'}];
     saveDeptPref();
+    saveDeptList();
     // 다른 시트는 열쇠 정책이 다를 수 있으므로 새로 물어봅니다.
     setAuthRequired(false);
     try{ localStorage.setItem(SYNC_URL_KEY, url); }catch(e){ console.warn('동기화 URL 저장 실패:', e); }
@@ -1640,7 +1657,9 @@
       pushHold = false;
       syncBlocked = true;
       syncStatus = 'error';
-      syncStatusMessage = '서버에서 불러오지 못해 이 브라우저에 저장된 내용을 표시 중입니다. ' +
+      syncStatusMessage = (state.groups.length
+          ? '서버에서 불러오지 못해 이 브라우저에 저장된 내용을 표시 중입니다. '
+          : '서버에서 불러오지 못했고 이 브라우저에 저장된 내용도 없습니다. ') +
         '팀 데이터를 보호하기 위해 자동 업로드를 중지했습니다. ' +
         '연결이 돌아오면 자동으로 합쳐 올립니다. 바로 시도하려면 이 배지를 클릭하세요. ('+e.message+')';
       console.warn('부서 내용 불러오기 실패:', e);
@@ -3473,34 +3492,26 @@
     }
   }
 
-  async function initState(){
+  // 페이지를 열 때 서버 응답을 기다리며 빈 화면을 보여 줄 이유가 없습니다.
+  // Apps Script 는 콜드스타트면 10초까지도 걸립니다. 지난번 내용을 먼저 그리고,
+  // 서버 응답이 오면 그때 합칩니다. (부서 전환과 같은 방식입니다)
+  function bootState(){
     loadSyncUrl();
-    renderDeptSelect();
+    loadDeptList();
     // 서버를 못 읽어도 지난번 기준이 있으면 나중에 합칠 수 있습니다.
     loadBaseState();
-    if(syncUrl){
-      syncStatus = 'syncing'; syncStatusMessage = '동기화 서버에서 불러오는 중...'; renderSyncStatus();
-      try{
-        const remote = await fetchRemoteWithRetry();
-        state = remote.state;
-        remoteRev = remote.rev;
-        remoteUpdatedAt = remote.updatedAt;
-        setBaseState(remote.state);
-        syncBlocked = false;
-        syncStatus = 'ok';
-        syncStatusMessage = '연결됨 · 마지막 불러오기 '+nowKST();
-        return;
-      }catch(e){
-        // 서버를 못 읽은 상태에서 로컬 데이터를 자동으로 올리면 팀 데이터가 날아갑니다.
-        syncBlocked = true;
-        syncStatus = 'error';
-        syncStatusMessage = '서버에서 불러오지 못해 이 브라우저의 로컬 데이터를 표시 중입니다. ' +
-          '팀 데이터를 보호하기 위해 자동 업로드를 중지했습니다. ' +
-          '연결이 돌아오면 자동으로 합쳐 올립니다. 바로 시도하려면 이 배지를 클릭하세요. ('+e.message+')';
-        console.warn('원격 데이터 불러오기 실패:', e);
-      }
+    if(!syncUrl){
+      // 연결이 없으면 예전 그대로입니다. 처음 온 사람에게는 예시 데이터를 보여 줍니다.
+      load();
+      return;
     }
-    load();
+    state = cachedDeptState();
+    // 서버 내용을 받기 전에는 올리지 않습니다. 낡은 캐시가 팀 시트를 덮어씁니다.
+    pushHold = true;
+    syncStatus = 'syncing';
+    syncStatusMessage = state.groups.length
+      ? '저장된 내용을 먼저 표시했습니다 · 서버에서 확인 중...'
+      : '동기화 서버에서 불러오는 중...';
   }
 
   // 부서를 처음 만들면 시트가 비어 있습니다. 그때 시드(예시) 데이터를 밀어 넣으면
@@ -3537,10 +3548,16 @@
     }catch(e){}
   });
 
-  initState().then(function(){
-    // 방금 서버에서 받아온 내용을 그대로 되돌려 올리지 않도록 첫 렌더는 업로드를 막습니다.
-    suppressRemotePush = true;
-    try{ fullRender(); } finally { suppressRemotePush = false; }
+  bootState();
+  // 서버에서 받아온 내용을 그대로 되돌려 올리지 않도록 렌더 중에는 업로드를 막습니다.
+  suppressRemotePush = true;
+  try{ fullRender(); } finally { suppressRemotePush = false; }
+  renderSyncStatus();
+  renderDeptSelect();
+  renderAuthUi();
+
+  // 여기서부터는 기다려도 화면이 비어 있지 않습니다.
+  refreshFromServer(deptSeq).then(function(){
     renderSyncStatus();
     renderDeptSelect();
     renderAuthUi();

@@ -109,6 +109,23 @@
   .filter-panel.hidden{display:none;}
   .filter-panel-row{display:flex; align-items:center; gap:8px;}
   .filter-range{font-size:12.5px; font-weight:600; color:var(--text); white-space:nowrap;}
+  .filter-who{
+    font:inherit; font-size:12px; padding:4px 6px; border-radius:6px;
+    border:1px solid var(--border); background:var(--panel); color:var(--text);
+    max-width:140px;
+  }
+  .filter-search{
+    display:inline-flex; align-items:center; gap:5px; padding:3px 8px;
+    border:1px solid var(--border); border-radius:6px; background:var(--panel); color:var(--sub);
+  }
+  .filter-search svg{display:block; flex:0 0 auto;}
+  .filter-search input{
+    font:inherit; font-size:12px; border:none; outline:none; background:transparent;
+    color:var(--text); width:190px; padding:1px 0;
+  }
+  .filter-search:focus-within{border-color:var(--accent);}
+  .filter-reset{font-size:11.5px; padding:3px 8px;}
+  .filter-reset.hidden{display:none;}
 
   /* 화면 탭 */
   .tabs{display:flex; gap:2px; margin-bottom:14px; border-bottom:1px solid var(--border);}
@@ -470,6 +487,13 @@
           <div class="filter-chips" id="filterRow4"></div>
         </div>
       </div>
+      <span class="filter-label">담당자</span>
+      <select class="filter-who" id="filterAssignee"></select>
+      <div class="filter-search">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><line x1="10.4" y1="10.4" x2="14" y2="14"/></svg>
+        <input type="search" id="filterSearch" placeholder="구분 · 상세업무 · 담당자 검색" autocomplete="off">
+      </div>
+      <button class="small filter-reset hidden" id="btnFilterReset" title="담당자와 검색어를 지웁니다">필터 해제</button>
       <span class="filter-info" id="filterInfo"></span>
       <span class="spacer"></span>
       <div class="menu-wrap" id="collapseWrap">
@@ -2019,6 +2043,11 @@
   // 접고 펴는 동작이 팀원 화면에 영향을 주지 않습니다.
   let collapsedIds = new Set();
   let periodFilter = {mode:'all', year:new Date().getFullYear()};
+  // 담당자와 검색어도 보기 설정입니다. 데이터가 아니라 이 브라우저에만 남습니다.
+  const ASSIGNEE_FILTER_KEY = 'wbs_assignee_filter_v1';
+  const SEARCH_FILTER_KEY = 'wbs_search_filter_v1';
+  let assigneeFilter = '';   // '' 이면 전체
+  let searchText = '';
 
   function loadViewPrefs(){
     try{
@@ -2030,6 +2059,8 @@
       const ids = JSON.parse(localStorage.getItem(GRID_COLLAPSED_KEY) || '[]');
       if(Array.isArray(ids)) collapsedIds = new Set(ids.filter(function(v){ return typeof v === 'string'; }));
     }catch(e){}
+    try{ assigneeFilter = localStorage.getItem(ASSIGNEE_FILTER_KEY) || ''; }catch(e){}
+    try{ searchText = localStorage.getItem(SEARCH_FILTER_KEY) || ''; }catch(e){}
     try{
       const raw = JSON.parse(localStorage.getItem(PERIOD_FILTER_KEY) || 'null');
       if(raw && typeof raw.mode === 'string' && Number(raw.year)){
@@ -2042,6 +2073,8 @@
       localStorage.setItem(GRID_SHOW_DONE_KEY, gridShowDone ? '1' : '0');
       localStorage.setItem(GRID_COLLAPSED_KEY, JSON.stringify(Array.from(collapsedIds)));
       localStorage.setItem(PERIOD_FILTER_KEY, JSON.stringify(periodFilter));
+      localStorage.setItem(ASSIGNEE_FILTER_KEY, assigneeFilter);
+      localStorage.setItem(SEARCH_FILTER_KEY, searchText);
       localStorage.setItem(ACTIVE_VIEW_KEY, activeView);
     }catch(e){}
   }
@@ -2094,6 +2127,51 @@
   // 화면에 그릴 순서와 범위를 계산합니다. state.groups는 절대 바꾸지 않고,
   // 원래 위치(dataIndex)와 원래 업무 번호(taskIndex)를 함께 넘겨
   // 드래그 재정렬·삭제가 정확한 대상을 가리키게 합니다.
+  // 담당자 칸은 "손규원, 임민주"처럼 여러 명이 들어갑니다. 쉼표로 갈라
+  // 한 사람씩 다룹니다. 가운뎃점이나 슬래시로 쓰신 경우도 같이 봅니다.
+  function splitAssignees(v){
+    return String(v || '').split(/[,/·]/)
+      .map(function(s){ return s.trim(); })
+      .filter(function(s){ return s; });
+  }
+
+  // 화면에 있는 담당자를 모아 선택 목록을 만듭니다.
+  function allAssignees(){
+    const set = Object.create(null);
+    state.groups.forEach(function(g){
+      g.tasks.forEach(function(t){
+        splitAssignees(t.assignee).forEach(function(a){ set[a] = true; });
+      });
+    });
+    return Object.keys(set).sort(function(a, b){ return a.localeCompare(b, 'ko'); });
+  }
+
+  function matchAssignee(t){
+    if(!assigneeFilter) return true;
+    return splitAssignees(t.assignee).indexOf(assigneeFilter) !== -1;
+  }
+
+  // 그룹 이름으로도 찾을 수 있어야 그 그룹 전체를 볼 수 있습니다.
+  function matchSearch(g, t){
+    const q = searchText.trim().toLowerCase();
+    if(!q) return true;
+    const hay = [g.category, g.title, t.category, t.detail, t.assignee, t.status]
+      .join(' ').toLowerCase();
+    return hay.indexOf(q) !== -1;
+  }
+
+  function anyFilterOn(){
+    return !!assigneeFilter || !!searchText.trim();
+  }
+
+  function clearExtraFilters(){
+    assigneeFilter = '';
+    searchText = '';
+    const s = document.getElementById('filterSearch');
+    if(s) s.value = '';
+    saveViewPrefs();
+  }
+
   function visibleRows(){
     const range = periodRange();
     const all = state.groups.map(function(g, i){ return {g:g, dataIndex:i}; });
@@ -2106,11 +2184,12 @@
     ordered.forEach(function(r){
       const tasks = [];
       r.g.tasks.forEach(function(t, ti){
-        if(taskInPeriod(t, range)) tasks.push({t:t, taskIndex:ti});
+        if(taskInPeriod(t, range) && matchAssignee(t) && matchSearch(r.g, t)) tasks.push({t:t, taskIndex:ti});
         else hiddenTasks++;
       });
-      // 업무가 있는 그룹인데 조회기간에 하나도 안 걸리면 그룹째 숨깁니다.
-      if(range && r.g.tasks.length > 0 && tasks.length === 0){ hiddenGroups++; return; }
+      // 업무가 있는 그룹인데 하나도 안 걸리면 그룹째 숨깁니다.
+      const filtering = !!range || anyFilterOn();
+      if(filtering && r.g.tasks.length > 0 && tasks.length === 0){ hiddenGroups++; return; }
       rows.push({g:r.g, dataIndex:r.dataIndex, tasks:tasks});
     });
     return {rows:rows, hiddenGroups:hiddenGroups, hiddenTasks:hiddenTasks, range:range};
@@ -2203,11 +2282,35 @@
     const range = document.getElementById('filterRange');
     if(range) range.textContent = periodRangeText();
 
+    const who = document.getElementById('filterAssignee');
+    if(who){
+      const names = allAssignees();
+      // 고른 담당자가 목록에서 사라져도 남겨 둡니다. 조용히 풀리면
+      // 왜 아무것도 안 나오는지 알 수 없습니다.
+      if(assigneeFilter && names.indexOf(assigneeFilter) === -1) names.push(assigneeFilter);
+      who.innerHTML = '';
+      who.appendChild(el('option', Object.assign({value:''},
+        assigneeFilter ? {} : {selected:'selected'}), ['전체']));
+      names.forEach(function(a){
+        who.appendChild(el('option', Object.assign({value:a},
+          a === assigneeFilter ? {selected:'selected'} : {}), [a]));
+      });
+    }
+    const box = document.getElementById('filterSearch');
+    // 치고 있는 중에는 건드리지 않습니다. 입력이 잠깐 멈춘 사이에 다시 그리면
+    // 그 뒤에 친 글자가 되돌려져 사라집니다.
+    if(box && document.activeElement !== box && box.value !== searchText) box.value = searchText;
+    const reset = document.getElementById('btnFilterReset');
+    if(reset) reset.classList.toggle('hidden', !anyFilterOn());
+
     const info = document.getElementById('filterInfo');
     if(info){
       const view = visibleRows();
       const shown = view.rows.reduce(function(s, r){ return s + r.tasks.length; }, 0);
-      let text = periodLabel() + ' · 그룹 ' + view.rows.length + ' / 업무 ' + shown + '건';
+      let text = periodLabel();
+      if(assigneeFilter) text += ' · 담당자 ' + assigneeFilter;
+      if(searchText.trim()) text += ' · "' + searchText.trim() + '"';
+      text += ' · 그룹 ' + view.rows.length + ' / 업무 ' + shown + '건';
       if(view.hiddenGroups || view.hiddenTasks){
         text += ' (숨김 그룹 ' + view.hiddenGroups + ' / 업무 ' + view.hiddenTasks + '건)';
       }
@@ -3542,11 +3645,12 @@
     const g = makeGroup();
     g.tasks.push(makeTask());
     state.groups.push(g);
-    // 조회기간이 걸려 있으면 새 그룹이 곧바로 걸러져 사라져 보입니다. 전체로 되돌립니다.
+    // 필터가 걸려 있으면 새 그룹이 곧바로 걸러져 사라져 보입니다. 전체로 되돌립니다.
     if(periodFilter.mode !== 'all'){
       periodFilter = {mode:'all', year:periodFilter.year};
       saveViewPrefs();
     }
+    if(anyFilterOn()) clearExtraFilters();
     fullRender();
   });
   document.getElementById('syncBadge').addEventListener('click', function(){
@@ -3665,6 +3769,26 @@
       if(e.key === 'Escape') closeFilterPanel();
     });
   })();
+  document.getElementById('filterAssignee').addEventListener('change', function(e){
+    assigneeFilter = e.target.value;
+    saveViewPrefs();
+    refreshViews();
+  });
+  // 입력할 때마다 표를 다시 그리면 글자가 밀립니다. 잠깐 멈출 때 반영합니다.
+  let searchTimer = null;
+  document.getElementById('filterSearch').addEventListener('input', function(e){
+    const v = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function(){
+      searchText = v;
+      saveViewPrefs();
+      refreshViews();
+    }, 250);
+  });
+  document.getElementById('btnFilterReset').addEventListener('click', function(){
+    clearExtraFilters();
+    refreshViews();
+  });
   document.getElementById('filterYear').addEventListener('change', function(e){
     const y = Number(e.target.value);
     if(!y) return;

@@ -261,7 +261,13 @@
   .seg-plan{background:var(--st-plan-mid);}
 
   table{width:100%; min-width:1340px; border-collapse:collapse; table-layout:fixed;}
-  col.c-no{width:56px;} col.c-product{width:110px;} col.c-cat{width:90px;} col.c-detail{width:auto;}
+  col.c-no{width:56px;} col.c-product{width:124px;} col.c-cat{width:90px;} col.c-detail{width:auto;}
+  select.group-product{
+    width:100%; font:inherit; font-size:13px; font-weight:700; color:var(--text);
+    border:1px solid transparent; border-radius:6px; background:transparent; padding:4px 2px;
+  }
+  select.group-product:hover{border-color:var(--border);}
+  select.group-product:focus{border-color:var(--accent); outline:none;}
   col.c-assignee{width:156px;} col.c-md{width:70px;} col.c-date{width:184px;} col.c-date-end{width:240px;}
   col.c-status{width:96px;} col.c-actions{width:120px;}
   thead th{
@@ -426,6 +432,7 @@
         </div>
         <div class="menu-group">
           <div class="menu-label">설정</div>
+          <button class="admin-only" id="btnProducts">제품 관리</button>
           <button id="btnHolidays">공휴일 관리</button>
           <button class="admin-only" id="btnCopyViewerLink">담당자용 링크 복사</button>
         </div>
@@ -555,6 +562,25 @@
         <h2>타임라인</h2>
       </div>
       <div id="timelineInner"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="productModal">
+  <div class="modal">
+    <h2>제품 관리</h2>
+    <p style="font-size:12px; color:var(--sub); line-height:1.6; margin-top:-6px;">
+      여기에 등록한 제품을 그룹에서 골라 쓰게 됩니다. 목록은 구글 시트에 함께 저장되어 팀원 모두에게 같이 보입니다.
+    </p>
+    <div class="holiday-form">
+      <input type="text" id="pdName" placeholder="제품명" autocomplete="off">
+      <button class="primary small" id="pdAdd">등록</button>
+    </div>
+    <div class="holiday-list" id="productList"></div>
+    <div id="productUnreg"></div>
+    <div class="modal-footer">
+      <span></span>
+      <button class="small" id="pdClose">닫기</button>
     </div>
   </div>
 </div>
@@ -804,7 +830,12 @@
         })
       };
     });
-    return { groups: groups };
+    // 제품 목록은 팀이 함께 쓰는 값이라 데이터에 담아 동기화합니다.
+    const products = Array.isArray(data.products)
+      ? data.products.map(function(p){ return String(p == null ? '' : p).trim(); })
+          .filter(function(p, i, arr){ return p && arr.indexOf(p) === i; })
+      : [];
+    return { groups: groups, products: products };
   }
   function countTasks(s){
     return s.groups.reduce(function(n,g){ return n + (g.tasks ? g.tasks.length : 0); }, 0);
@@ -824,7 +855,7 @@
       makeTask({category:'작성', detail:'ONE AI 상담챗봇 고도화 및 관리자 메뉴 개발 완료보고서', assignee:'임민주, 손규원', md:4, start:'2026-01-15', status:'완료'}),
       makeTask({category:'보고', detail:'상무님께 보고', assignee:'안현정', md:1, start:'2026-01-23', status:'완료'})
     ];
-    state = { groups: [g1, g2] };
+    state = { groups: [g1, g2], products: ['영업자료', '내부문서'] };
   }
 
   /* ---------------- 권한 (관리자 / 조회 전용) ---------------- */
@@ -1112,9 +1143,31 @@
     return mergeOrder(primary, secondary, keep).map(function(id){ return keep[id]; });
   }
 
+  // 제품 목록은 이름만 담긴 단순한 줄입니다. 한쪽이 지운 것은 지운 대로,
+  // 한쪽이 더한 것은 더한 대로 둡니다.
+  function mergeProducts(baseArr, mineArr, theirsArr){
+    const base = baseArr || [], mine = mineArr || [], theirs = theirsArr || [];
+    const out = [];
+    theirs.forEach(function(p){
+      // 내가 지운 것(기준에는 있었는데 내 쪽에 없음)은 되살리지 않습니다.
+      if(base.indexOf(p) !== -1 && mine.indexOf(p) === -1) return;
+      if(out.indexOf(p) === -1) out.push(p);
+    });
+    mine.forEach(function(p){
+      if(out.indexOf(p) !== -1) return;
+      // 상대가 지운 것도 지운 대로 둡니다.
+      if(base.indexOf(p) !== -1 && theirs.indexOf(p) === -1) return;
+      out.push(p);
+    });
+    return out;
+  }
+
   function mergeStates(base, mine, theirs){
     const stats = {collisions:0, addedByThem:0, changedByThem:0, removedByThem:0, revived:0};
-    const merged = {groups: mergeList(base.groups, mine.groups, theirs.groups, mergeGroup, stats, MERGE_GROUP_FIELDS)};
+    const merged = {
+      groups: mergeList(base.groups, mine.groups, theirs.groups, mergeGroup, stats, MERGE_GROUP_FIELDS),
+      products: mergeProducts(base.products, mine.products, theirs.products)
+    };
     return {state: sanitizeState(merged) || merged, stats: stats};
   }
 
@@ -1832,6 +1885,25 @@
     return Object.keys(set).sort(function(a, b){ return a.localeCompare(b, 'ko'); });
   }
 
+  /* ---------------- 제품 목록 ---------------- */
+  // 미리 등록해 두고 그룹에서는 골라 씁니다. 목록은 데이터에 담겨 팀이 함께 씁니다.
+  function productList(){
+    return Array.isArray(state.products) ? state.products : [];
+  }
+  // 등록 목록에 없더라도 어느 그룹이 쓰고 있으면 고를 수 있게 남겨 둡니다.
+  // 그러지 않으면 예전에 적어 둔 값이 조용히 사라집니다.
+  function productOptions(){
+    const out = productList().slice();
+    state.groups.forEach(function(g){
+      const p = String(g.product || '').trim();
+      if(p && out.indexOf(p) === -1) out.push(p);
+    });
+    return out;
+  }
+  function productUsedBy(name){
+    return state.groups.filter(function(g){ return String(g.product || '').trim() === name; });
+  }
+
   // 제품은 그룹이 가지므로 담당자처럼 쪼개지 않고 값 그대로 비교합니다.
   function allProducts(){
     const set = Object.create(null);
@@ -1869,6 +1941,81 @@
     if(!assigneeFilters.length) return '전체';
     if(assigneeFilters.length === 1) return assigneeFilters[0];
     return assigneeFilters[0] + ' 외 ' + (assigneeFilters.length - 1) + '명';
+  }
+
+  /* ---- 제품 관리 화면 ---- */
+  function renderProductModal(){
+    const list = document.getElementById('productList');
+    if(!list) return;
+    list.innerHTML = '';
+    const regs = productList();
+    if(!regs.length){
+      list.appendChild(el('div', {class:'holiday-item', style:'color:var(--sub);'}, ['등록된 제품이 없습니다.']));
+    }
+    regs.forEach(function(p){
+      const row = el('div', {class:'holiday-item'});
+      row.appendChild(el('span', {class:'hd-name'}, [p + ' (' + productUsedBy(p).length + '개 그룹)']));
+      const btns = el('span', {style:'display:flex; gap:6px;'});
+      btns.appendChild(el('button', {class:'small', onclick:function(){ renameProduct(p); }}, ['이름 변경']));
+      btns.appendChild(el('button', {class:'small danger', onclick:function(){ removeProduct(p); }}, ['삭제']));
+      row.appendChild(btns);
+      list.appendChild(row);
+    });
+
+    // 예전에 직접 적어 둔 값이 있으면 등록할 수 있게 보여 줍니다.
+    const box = document.getElementById('productUnreg');
+    box.innerHTML = '';
+    const unreg = productOptions().filter(function(p){ return regs.indexOf(p) === -1; });
+    if(!unreg.length) return;
+    box.appendChild(el('div', {style:'font-size:12px; color:var(--sub); margin:10px 0 6px;'},
+      ['아래 제품은 그룹에 적혀 있지만 목록에 없습니다.']));
+    const wrap = el('div', {style:'display:flex; flex-wrap:wrap; gap:6px;'});
+    unreg.forEach(function(p){
+      wrap.appendChild(el('button', {class:'small', onclick:function(){
+        state.products = productList().concat([p]);
+        fullRender();
+        renderProductModal();
+      }}, ['+ ' + p]));
+    });
+    box.appendChild(wrap);
+  }
+
+  function addProduct(){
+    const input = document.getElementById('pdName');
+    const name = (input.value || '').trim();
+    if(!name) return;
+    if(productList().indexOf(name) !== -1){ alert('이미 등록된 제품입니다.'); return; }
+    state.products = productList().concat([name]);
+    input.value = '';
+    fullRender();
+    renderProductModal();
+  }
+
+  function renameProduct(oldName){
+    const name = (prompt('"' + oldName + '" 의 새 이름을 입력하세요.', oldName) || '').trim();
+    if(!name || name === oldName) return;
+    if(productList().indexOf(name) !== -1){ alert('이미 등록된 제품입니다.'); return; }
+    state.products = productList().map(function(p){ return p === oldName ? name : p; });
+    // 그 제품을 쓰던 그룹도 같이 바꿔 줍니다. 안 그러면 목록에 없는 값만 남습니다.
+    state.groups.forEach(function(g){ if(String(g.product||'').trim() === oldName) g.product = name; });
+    if(productFilter === oldName) productFilter = name;
+    saveViewPrefs();
+    fullRender();
+    renderProductModal();
+  }
+
+  function removeProduct(name){
+    const used = productUsedBy(name);
+    const msg = used.length
+      ? '"' + name + '" 을(를) 목록에서 지울까요?' + String.fromCharCode(10) +
+        used.length + '개 그룹이 쓰고 있습니다. 그 그룹의 제품 칸도 함께 비워집니다.'
+      : '"' + name + '" 을(를) 목록에서 지울까요?';
+    if(!confirm(msg)) return;
+    state.products = productList().filter(function(p){ return p !== name; });
+    used.forEach(function(g){ g.product = ''; });
+    if(productFilter === name){ productFilter = ''; saveViewPrefs(); }
+    fullRender();
+    renderProductModal();
   }
 
   function closeAssigneePanel(){
@@ -2274,9 +2421,17 @@
     noTd.appendChild(noWrap);
     tr.appendChild(noTd);
 
-    tr.appendChild(el('td', {}, [
-      el('input', {type:'text', draggable:'false', value:g.product||'', placeholder:'제품', oninput:function(e){ g.product=e.target.value; debouncedSave(); }, onblur:refreshDerived})
-    ]));
+    const prodSel = el('select', {class:'group-product', draggable:'false', onchange:function(e){
+      g.product = e.target.value;
+      debouncedSave();
+      refreshDerived();
+    }});
+    prodSel.appendChild(el('option', Object.assign({value:''}, g.product ? {} : {selected:'selected'}), ['— 선택 —']));
+    productOptions().forEach(function(p){
+      prodSel.appendChild(el('option', Object.assign({value:p},
+        p === g.product ? {selected:'selected'} : {}), [p]));
+    });
+    tr.appendChild(el('td', {}, [prodSel]));
     tr.appendChild(el('td', {}, [
       el('input', {type:'text', draggable:'false', value:g.category, placeholder:'구분', oninput:function(e){ g.category=e.target.value; debouncedSave(); }, onblur:refreshDerived})
     ]));
@@ -3439,6 +3594,18 @@
   document.getElementById('btnCopyViewerLink').addEventListener('click', copyViewerLink);
   document.getElementById('btnAdminOn').addEventListener('click', enterAdminMode);
   document.getElementById('btnAdminOff').addEventListener('click', exitAdminMode);
+  document.getElementById('btnProducts').addEventListener('click', function(){
+    renderProductModal();
+    document.getElementById('productModal').classList.remove('hidden');
+  });
+  document.getElementById('pdAdd').addEventListener('click', addProduct);
+  document.getElementById('pdName').addEventListener('keydown', function(e){
+    if(e.key === 'Enter') addProduct();
+  });
+  document.getElementById('pdClose').addEventListener('click', function(){
+    document.getElementById('productModal').classList.add('hidden');
+  });
+  wireOverlayClickToClose(document.getElementById('productModal'));
   document.getElementById('btnHolidays').addEventListener('click', function(){
     renderHolidayList();
     document.getElementById('holidayModal').classList.remove('hidden');

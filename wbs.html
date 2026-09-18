@@ -427,7 +427,7 @@
       <div class="menu-panel hidden" id="menuPanel">
         <div class="menu-group">
           <div class="menu-label">권한</div>
-          <button id="btnAdminOn">관리자 모드</button>
+          <button id="btnAdminOn">관리자 모드 (구글 로그인)</button>
           <button id="btnAdminOff">조회 전용으로 전환</button>
         </div>
         <div class="menu-group">
@@ -859,30 +859,13 @@
   }
 
   /* ---------------- 권한 (관리자 / 조회 전용) ---------------- */
-  // 서버(Code.gs)의 스크립트 속성 ADMIN_KEY 가 설정돼 있으면 쓰기에 열쇠가 필요합니다.
-  // 화면 잠금은 실수 방지용이고, 실제 차단은 서버가 합니다.
-  const ADMIN_KEY_STORE = 'wbs_admin_key_v1';
-  const AUTH_REQUIRED_STORE = 'wbs_auth_required_v1';
-  let adminKey = '';
-  let authRequired = false;   // 서버가 열쇠를 요구하는가 (GET 응답으로 받음)
+  // 편집은 구글 로그인한 계정만 할 수 있고, 누가 되는지는 Firestore 보안 규칙이
+  // 정합니다. 예전 공유 열쇠와 달리 이 브라우저에서 꺼내 갈 비밀이 없습니다.
+  // 조회는 로그인 없이 됩니다. 문서 ID 를 아는 것이 곧 조회 권한입니다.
+  let authUser = null;      // 로그인한 계정. 없으면 조회 전용
+  let authReady = false;    // 로그인 상태를 한 번이라도 확인했는가
 
-  function loadAdminKey(){
-    try{ adminKey = localStorage.getItem(ADMIN_KEY_STORE) || ''; }catch(e){ adminKey = ''; }
-    // 서버에 못 물어보는 상황(오프라인·주소 오류)에서도 마지막으로 알던 상태를 유지합니다.
-    // 이게 없으면 연결이 끊긴 순간 조회 전용이 풀려 버립니다.
-    try{ authRequired = localStorage.getItem(AUTH_REQUIRED_STORE) === '1'; }catch(e){ authRequired = false; }
-  }
-  function setAuthRequired(v){
-    authRequired = !!v;
-    try{ localStorage.setItem(AUTH_REQUIRED_STORE, authRequired ? '1' : '0'); }catch(e){}
-  }
-  function saveAdminKey(){
-    try{
-      if(adminKey) localStorage.setItem(ADMIN_KEY_STORE, adminKey);
-      else localStorage.removeItem(ADMIN_KEY_STORE);
-    }catch(e){}
-  }
-  function canEdit(){ return !authRequired || !!adminKey; }
+  function canEdit(){ return !!authUser; }
 
   // 다 만들어진 행을 한 번에 잠급니다. 입력칸마다 속성을 붙이는 것보다
   // 새 입력칸이 생겼을 때 빠뜨릴 여지가 적습니다.
@@ -903,108 +886,143 @@
     document.body.classList.toggle('readonly', ro);
     const badge = document.getElementById('authBadge');
     if(badge){
-      if(!authRequired){
-        badge.style.display = 'none';
-      } else {
-        badge.style.display = 'inline-flex';
-        badge.setAttribute('data-role', adminKey ? 'admin' : 'viewer');
-        badge.textContent = adminKey ? '관리자' : '조회 전용';
-        badge.title = adminKey
-          ? '편집한 내용이 저장됩니다'
-          : '조회만 가능합니다. 기능모음 → 관리자 모드에서 열쇠를 입력하세요';
-      }
+      // 로그인 상태를 아직 모르는 동안에는 아무것도 단정하지 않습니다.
+      badge.style.display = authReady ? 'inline-flex' : 'none';
+      badge.setAttribute('data-role', authUser ? 'admin' : 'viewer');
+      badge.textContent = authUser ? '관리자' : '조회 전용';
+      badge.title = authUser
+        ? (authUser.email || '') + ' 로 로그인됨 · 편집한 내용이 저장됩니다'
+        : '조회만 가능합니다. 기능모음 → 관리자 모드에서 구글 로그인하세요';
     }
     const on = document.getElementById('btnAdminOn');
     const off = document.getElementById('btnAdminOff');
-    if(on) on.style.display = adminKey ? 'none' : '';
-    if(off) off.style.display = adminKey ? '' : 'none';
+    if(on) on.style.display = authUser ? 'none' : '';
+    if(off) off.style.display = authUser ? '' : 'none';
   }
 
   async function enterAdminMode(){
-    if(!syncUrl){ alert('동기화 연결이 없으면 권한을 확인할 수 없습니다.\n기능모음 → 동기화 설정에서 먼저 연결해주세요.'); return; }
-    const k = (prompt('관리자 열쇠를 입력하세요.') || '').trim();
-    if(!k) return;
+    const fb = await firebaseReady();
+    if(!fb){ alert('로그인 기능을 불러오지 못했습니다. 네트워크를 확인해주세요.'); return; }
     try{
-      const res = await fetch(syncUrl, {
-        method: 'POST',
-        headers: {'Content-Type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({_action: 'checkKey', _key: k})
-      });
-      let r = {};
-      try{ r = await res.json(); }catch(e){}
-      if(!res.ok || r.ok !== true){
-        alert(r.error || '열쇠가 올바르지 않습니다.');
-        return;
-      }
-      adminKey = k;
-      setAuthRequired(r.authRequired);
-      saveAdminKey();
-      renderAuthUi();
-      fullRender();
-    }catch(e){ alert('열쇠 확인에 실패했습니다: ' + e.message); }
-  }
-  function exitAdminMode(){
-    if(!adminKey) return;
-    adminKey = '';
-    saveAdminKey();
-    renderAuthUi();
-    fullRender();
-  }
-  // 열쇠가 바뀌어 서버가 거부하면 조회 전용으로 되돌립니다.
-  function dropAdminOnAuthFail(){
-    adminKey = '';
-    setAuthRequired(true);
-    saveAdminKey();
-    renderAuthUi();
+      await fb.signInWithPopup(fb.auth, new fb.GoogleAuthProvider());
+      // 실제 편집 권한은 보안 규칙이 정합니다. 명단에 없으면 저장할 때 거부됩니다.
+    }catch(e){
+      if(e && (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request')) return;
+      alert('로그인에 실패했습니다: ' + ((e && e.message) || e));
+    }
   }
 
-  /* ---------------- 시트 위치 (고정) ---------------- */
-  // 화면에서 부서·업무를 고르는 기능을 걷어냈습니다. 서버(Code.gs)와 구글 시트는
-  // 그대로 두었으므로 데이터는 남아 있고, 필요하면 화면만 되살리면 됩니다.
-  // 여기서는 늘 기본 부서 / 기본 업무(= 예전부터 쓰던 Data 시트)만 봅니다.
-  const DEFAULT_DEPT = 'default';
-  const DEFAULT_WORK = 'default';
-  const deptId = DEFAULT_DEPT;
-  const workId = DEFAULT_WORK;
+  async function exitAdminMode(){
+    const fb = await firebaseReady();
+    if(!fb) return;
+    try{ await fb.signOut(fb.auth); }catch(e){}
+  }
+
+  // 명단에 없는 계정이면 저장이 거부됩니다. 그 사실을 화면에 남깁니다.
+  function noteWriteDenied(){
+    syncBlocked = true;
+    syncStatus = 'error';
+    syncStatusMessage = '이 계정에는 편집 권한이 없습니다 (' + ((authUser && authUser.email) || '') + '). ' +
+      '관리자에게 권한을 요청하거나 기능모음 → 조회 전용으로 전환 을 눌러주세요.';
+    renderSyncStatus();
+  }
+
+  /* ---------------- Firestore ---------------- */
+  // 이 설정값은 비밀이 아닙니다. Firebase 는 설정값이 아니라 보안 규칙으로 막는
+  // 구조라 공식 문서도 공개를 전제로 합니다. 저장소에 들어가도 괜찮습니다.
+  const FIREBASE_CONFIG = {
+    apiKey: 'AIzaSyBkwPTb3jH9ElY_uqD6SKkDs5LWcWVIyUQ',
+    authDomain: 'wbs-project-c3d2e.firebaseapp.com',
+    projectId: 'wbs-project-c3d2e',
+    storageBucket: 'wbs-project-c3d2e.firebasestorage.app',
+    messagingSenderId: '709920304005',
+    appId: '1:709920304005:web:dcc0b3df7666de721bb2ec'
+  };
+  const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/12.19.0/';
+  const COLLECTION = 'wbs';
+
+  // 문서 ID 가 곧 열쇠입니다. 링크로 받아 이 브라우저에만 둡니다.
+  // 규칙에서 목록 조회를 막아 두었기에, ID 를 모르면 찾아갈 수 없습니다.
+  const DOC_ID_KEY = 'wbs_doc_v1';
+  let docId = '';
 
   function deptDataKey(){ return STORAGE_KEY; }
 
-  /* ---------------- Google Sheets sync (optional) ---------------- */
-  const SYNC_URL_KEY = 'wbs_sync_url_v1';
-  let syncUrl = '';
   let syncStatus = 'idle'; // idle | syncing | ok | error
   let syncStatusMessage = '';
   let syncTimer = null;
 
   // 원격 데이터를 한 번도 읽지 못한 세션은 자동 업로드를 막습니다.
-  // 이게 없으면 네트워크가 잠깐 끊겼을 때 이 브라우저의 오래된(또는 시드) 데이터가
-  // 1.2초 뒤 팀 시트를 통째로 덮어씁니다.
+  // 이게 없으면 잠깐 끊겼을 때 이 브라우저의 오래된 데이터가 팀 데이터를 덮어씁니다.
   let syncBlocked = false;
   // 서버 데이터를 화면에 채워 넣는 동안에는 되돌려 올리지 않기 위한 플래그입니다.
   let suppressRemotePush = false;
-  // 서버에서 마지막으로 확인한 리비전. POST할 때 함께 보내 그 사이 다른 사람이
-  // 저장했는지 서버가 판별합니다. null이면 아직 서버를 읽은 적이 없다는 뜻입니다.
+  // 마지막으로 확인한 리비전. 저장할 때 트랜잭션 안에서 이 값과 비교해
+  // 그 사이 누가 먼저 저장했는지 가려냅니다.
   let remoteRev = null;
   let remoteUpdatedAt = '';
-  // 구버전 Code.gs가 배포돼 있으면 리비전을 돌려주지 않습니다. 그때는 충돌 감지가 꺼집니다.
-  let conflictSupported = true;
   // 서버 내용을 아직 못 받은 동안 업로드만 잠깐 미룹니다. 오류가 아니라 대기라서
-  // syncBlocked 와 달리 배지에 경고로 표시하지 않습니다. 이게 없으면 낡은 캐시가
-  // 팀 시트를 덮어씁니다.
+  // syncBlocked 와 달리 배지에 경고로 표시하지 않습니다.
   let pushHold = false;
-  // 올리는 중에 또 고친 경우를 위한 플래그. 올리기가 겹치면 같은 내용을 두 번 보냅니다.
+  // 올리는 중에 또 고친 경우를 위한 플래그.
   let pushing = false;
   let pushQueued = false;
-  // 아직 서버로 못 올린 내 변경이 있는가. 주기 조회가 끼어들지 판단하는 데 씁니다.
+  // 아직 못 올린 내 변경이 있는가.
   let pendingLocalChange = false;
   // 병합 결과를 다음 상태 문구에 한 번 실어 보냅니다.
   let lastMergeNote = '';
-  // 같은 "동기화 중"이라도 하는 일이 다릅니다. 화면에 이미 내용이 떠 있는데
-  // "동기화 중"만 3초씩 걸려 있으면 뭘 기다리는지 알 수 없습니다.
   //   load  : 보여 줄 게 없어 서버를 기다리는 중
   //   check : 저장된 내용을 이미 띄웠고 최신인지만 확인하는 중
   //   save  : 내가 고친 것을 올리는 중
   let syncPhase = 'load';
+
+  /* ---- SDK 는 처음 필요할 때 한 번만 불러옵니다 ---- */
+  let fbPromise = null;
+  function firebaseReady(){
+    if(fbPromise) return fbPromise;
+    fbPromise = (async function(){
+      try{
+        const [appMod, fsMod, authMod] = await Promise.all([
+          import(FIREBASE_SDK + 'firebase-app.js'),
+          import(FIREBASE_SDK + 'firebase-firestore.js'),
+          import(FIREBASE_SDK + 'firebase-auth.js')
+        ]);
+        const app = appMod.initializeApp(FIREBASE_CONFIG);
+        const fb = {
+          db: fsMod.getFirestore(app),
+          auth: authMod.getAuth(app),
+          doc: fsMod.doc,
+          getDoc: fsMod.getDoc,
+          onSnapshot: fsMod.onSnapshot,
+          runTransaction: fsMod.runTransaction,
+          GoogleAuthProvider: authMod.GoogleAuthProvider,
+          signInWithPopup: authMod.signInWithPopup,
+          signOut: authMod.signOut,
+          onAuthStateChanged: authMod.onAuthStateChanged
+        };
+        // 로그인 상태가 바뀌면 편집 가능 여부가 달라지므로 표를 다시 그립니다.
+        fb.onAuthStateChanged(fb.auth, function(u){
+          authUser = u || null;
+          authReady = true;
+          renderAuthUi();
+          suppressRemotePush = true;
+          try{ fullRender(); } finally { suppressRemotePush = false; }
+          renderSyncStatus();
+        });
+        return fb;
+      }catch(e){
+        console.warn('Firebase SDK 로드 실패:', e);
+        fbPromise = null;   // 다음에 다시 시도할 수 있게 둡니다
+        return null;
+      }
+    })();
+    return fbPromise;
+  }
+
+  function docRefOr(fb){
+    if(!fb || !docId) return null;
+    return fb.doc(fb.db, COLLECTION, docId);
+  }
 
   /* ---------------- 동시 편집 자동 병합 ---------------- */
   // 둘이 같은 부서를 동시에 고치면 예전에는 "어느 쪽을 살릴지" 물어보고 한쪽을
@@ -1234,26 +1252,19 @@
   }
 
   function loadSyncUrl(){
-    try{ syncUrl = localStorage.getItem(SYNC_URL_KEY) || ''; }catch(e){ syncUrl = ''; }
+    try{ docId = localStorage.getItem(DOC_ID_KEY) || ''; }catch(e){ docId = ''; }
   }
 
   /* ---- 관리자가 보낸 링크(wbs.html?s=...)로 연결을 한 번에 설정 ---- */
-  // 담당자가 주소를 직접 입력하거나 관리할 일이 없게 하려는 장치입니다.
+  // 담당자가 문서 ID 를 직접 다룰 일이 없게 하려는 장치입니다.
   const SYNC_LINK_PARAM = 's';
 
-  // 아무 주소나 받으면 악의적인 링크로 팀 데이터를 엉뚱한 서버에 보내게 됩니다.
-  // Apps Script 웹 앱 주소만 허용합니다.
-  function isValidSyncUrl(u){
-    try{
-      const url = new URL(u);
-      return url.protocol === 'https:'
-        && url.hostname === 'script.google.com'
-        && url.pathname.indexOf('/macros/s/') === 0
-        && /\/exec$/.test(url.pathname);
-    }catch(e){ return false; }
+  // 아무 값이나 받으면 엉뚱한 문서를 보게 됩니다. 우리가 만드는 형태만 받습니다.
+  function isValidDocId(v){
+    return typeof v === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(v);
   }
 
-  // 주소창에 연결 주소가 남지 않도록 파라미터만 지웁니다. (뒤로가기 기록도 안 남김)
+  // 주소창에 문서 ID 가 남지 않도록 파라미터만 지웁니다. (뒤로가기 기록도 안 남김)
   function stripSyncLinkParam(){
     try{
       const url = new URL(location.href);
@@ -1261,55 +1272,52 @@
       url.searchParams.delete(SYNC_LINK_PARAM);
       const q = url.searchParams.toString();
       history.replaceState(null, '', url.pathname + (q ? '?' + q : '') + url.hash);
-    }catch(e){}   // file:// 등 replaceState 가 막힌 환경에서는 그냥 넘어갑니다
+    }catch(e){}
   }
 
-  // 부팅보다 먼저 불러서, 첫 로딩부터 이 연결로 동작하게 합니다.
+  // 부팅보다 먼저 불러서, 첫 로딩부터 이 문서로 동작하게 합니다.
   function applySyncLink(){
     let given = '';
     try{ given = new URL(location.href).searchParams.get(SYNC_LINK_PARAM) || ''; }catch(e){}
     if(!given) return;
     stripSyncLinkParam();
     given = given.trim();
-    if(!isValidSyncUrl(given)){
-      alert('링크에 담긴 동기화 주소가 올바르지 않습니다.' + String.fromCharCode(10) +
+    if(!isValidDocId(given)){
+      alert('링크에 담긴 주소가 올바르지 않습니다.' + String.fromCharCode(10) +
         '관리자에게 링크를 다시 받아주세요.');
       return;
     }
     let current = '';
-    try{ current = localStorage.getItem(SYNC_URL_KEY) || ''; }catch(e){}
+    try{ current = localStorage.getItem(DOC_ID_KEY) || ''; }catch(e){}
     if(current === given) return;
-    if(current && !confirm('이미 등록된 동기화 연결이 있습니다.' + String.fromCharCode(10) +
+    if(current && !confirm('이미 등록된 연결이 있습니다.' + String.fromCharCode(10) +
       '링크에 담긴 새 연결로 바꿀까요?')) return;
-    // 연결을 세우는 통로가 이 링크 하나뿐이라, 뒷정리도 여기서 다 합니다.
-    persistSyncUrl(given);
-    try{ localStorage.removeItem(AUTH_REQUIRED_STORE); }catch(e){}
+    persistDocId(given);
   }
 
-  // 관리자가 담당자에게 뿌릴 링크를 만듭니다. 열쇠는 절대 담지 않습니다.
+  // 관리자가 담당자에게 뿌릴 링크를 만듭니다.
   async function copyViewerLink(){
-    if(!syncUrl){
-      alert('이 브라우저에 동기화 연결이 없습니다.' + String.fromCharCode(10) +
+    if(!docId){
+      alert('이 브라우저에 연결이 없습니다.' + String.fromCharCode(10) +
         '관리자 링크를 한 번 연 뒤 다시 시도해주세요.');
       return;
     }
     let base = location.href;
     try{
       const u = new URL(location.href);
-      u.search = '';
-      u.hash = '';
+      u.search = ''; u.hash = '';
       base = u.href;
     }catch(e){}
-    const link = base + '?' + SYNC_LINK_PARAM + '=' + encodeURIComponent(syncUrl);
+    const link = base + '?' + SYNC_LINK_PARAM + '=' + encodeURIComponent(docId);
     try{
       await navigator.clipboard.writeText(link);
       alert('담당자용 링크를 복사했습니다.' + String.fromCharCode(10) +
         '사내 채널로 전달하세요. 받은 사람이 한 번 열면 자동으로 연결됩니다.');
     }catch(e){
-      // 클립보드 권한이 없거나 file:// 인 경우
       prompt('아래 링크를 복사해 사내 채널로 전달하세요.', link);
     }
   }
+
   // 부서마다 따로 쌓인 병합 기준을 한 번에 비웁니다.
   function clearAllBaseSnapshots(){
     baseState = null;
@@ -1323,21 +1331,17 @@
     }catch(e){}
   }
 
-  function persistSyncUrl(url){
-    syncUrl = url;
+  function persistDocId(id){
+    docId = id;
     remoteRev = null;
     remoteUpdatedAt = '';
     syncBlocked = false;
-    conflictSupported = true;
-    // 연결이 바뀌면 이전 시트의 기준과 주기 조회는 더 이상 의미가 없습니다.
-    // 기준을 남겨 두면 다른 시트 내용을 '내가 고친 것'으로 오해해 그대로 올립니다.
-    // 지금 부서뿐 아니라 모든 부서의 기준을 비웁니다.
+    // 연결이 바뀌면 이전 문서의 기준은 더 이상 의미가 없습니다. 남겨 두면
+    // 다른 문서 내용을 '내가 고친 것'으로 오해해 그대로 올립니다.
     clearAllBaseSnapshots();
-    startPolling();
-    // 다른 시트는 열쇠 정책이 다를 수 있으므로 새로 물어봅니다.
-    setAuthRequired(false);
-    try{ localStorage.setItem(SYNC_URL_KEY, url); }catch(e){ console.warn('동기화 URL 저장 실패:', e); }
+    try{ localStorage.setItem(DOC_ID_KEY, id); }catch(e){}
   }
+
   function nowKST(){ return new Date().toLocaleTimeString('ko-KR'); }
   function fmtRemoteTime(s){
     if(!s) return '시각 미상';
@@ -1345,25 +1349,24 @@
     return isNaN(d.getTime()) ? String(s) : d.toLocaleString('ko-KR');
   }
 
-  function syncUrlWithDept(){
-    return syncUrl + (syncUrl.indexOf('?') === -1 ? '?' : '&') +
-      'dept=' + encodeURIComponent(deptId) + '&work=' + encodeURIComponent(workId);
-  }
-
+  // 문서 한 번 읽기. 형태는 예전 서버 응답과 같게 맞춰 두었습니다.
   async function fetchRemoteState(){
-    const res = await fetch(syncUrlWithDept(), {method:'GET', cache:'no-store'});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
+    const fb = await firebaseReady();
+    if(!fb) throw new Error('연결 모듈을 불러오지 못했습니다');
+    const ref = docRefOr(fb);
+    if(!ref) throw new Error('연결이 없습니다');
+    const snap = await fb.getDoc(ref);
+    if(!snap.exists()){
+      // 아직 아무것도 없는 새 문서입니다. 빈 상태로 시작합니다.
+      return { state: {groups: [], products: []}, rev: 0, updatedAt: '' };
+    }
+    const data = snap.data() || {};
     const clean = sanitizeState(data);
     if(!clean) throw new Error('올바른 데이터 형식이 아닙니다');
-    // 구버전은 authRequired 도 안 내려줍니다. 그때는 잠그지 않습니다.
-    // 서버 응답이 최신 사실이므로 열쇠를 뺀 경우에도 자동으로 풀립니다.
-    setAuthRequired(data && data.authRequired);
-    renderAuthUi();
     return {
       state: clean,
-      rev: (data && typeof data.rev === 'number') ? data.rev : null,
-      updatedAt: (data && typeof data.updatedAt === 'string') ? data.updatedAt : ''
+      rev: (typeof data.rev === 'number') ? data.rev : 0,
+      updatedAt: (typeof data.updatedAt === 'string') ? data.updatedAt : ''
     };
   }
 
@@ -1393,9 +1396,7 @@
     });
   }
 
-  // 서버가 충돌을 알려오면 자동 업로드만 조용히 멈추고 상태 표시줄에 알립니다.
-  // 작업 중에 갑자기 팝업이 뜨지 않도록, 어느 쪽을 살릴지 묻는 선택은
-  // 사용자가 "저장"이나 "지금 동기화"를 직접 눌렀을 때(requestPush)만 띄웁니다.
+  // 합칠 기준이 없을 때만 나옵니다. 그 밖의 충돌은 묻지 않고 합칩니다.
   function handleConflict(result){
     const remote = sanitizeState(result.data);
     syncBlocked = true;
@@ -1406,7 +1407,7 @@
     renderSyncStatus();
   }
 
-  // 서버 데이터를 화면에 반영합니다. 이 과정에서 다시 서버로 올리지는 않습니다.
+  // 서버 데이터를 화면에 반영합니다. 이 과정에서 다시 올리지는 않습니다.
   function adoptRemote(cleanState, rev, updatedAt){
     state = cleanState;
     setBaseState(cleanState);
@@ -1414,13 +1415,13 @@
     remoteUpdatedAt = updatedAt || '';
     syncBlocked = false;
     syncStatus = 'ok';
-    syncStatusMessage = '서버 최신본을 불러왔습니다 · '+nowKST();
+    syncStatusMessage = '최신 내용을 불러왔습니다 · '+nowKST();
     suppressRemotePush = true;
     try{ fullRender(); } finally { suppressRemotePush = false; }
     renderSyncStatus();
   }
 
-  // 저장 버튼이 없으므로 실패해도 사용자가 다시 누를 길이 없습니다. 스스로 다시 시도합니다.
+  // 저장이 실패하면 사용자가 다시 누를 길이 없으므로 스스로 다시 시도합니다.
   let retryTimer = null;
   let retryDelay = 5000;
   function scheduleRetry(){
@@ -1433,12 +1434,10 @@
   function clearRetry(){ clearTimeout(retryTimer); retryTimer = null; retryDelay = 5000; }
 
   async function pushRemoteState(opts){
-    if(!syncUrl) return false;
-    // 조회 전용이면 애초에 보내지 않습니다. 보내봐야 서버가 거부합니다.
+    if(!docId) return false;
     if(!canEdit()) return false;
     const force = !!(opts && opts.force);
     if((syncBlocked || pushHold) && !force) return false;
-    // 올리는 중에 또 고쳤습니다. 지금 것이 끝난 뒤 한 번 더 보냅니다.
     if(pushing){ pushQueued = true; return false; }
     pushing = true;
     try{
@@ -1450,64 +1449,77 @@
   }
 
   async function pushOnce(force){
+    const fb = await firebaseReady();
+    const ref = docRefOr(fb);
+    if(!ref){
+      syncStatus = 'error';
+      syncStatusMessage = '연결 모듈을 불러오지 못했습니다 · 잠시 후 다시 시도합니다';
+      scheduleRetry();
+      renderSyncStatus();
+      return false;
+    }
     // 충돌이 나면 합쳐서 다시 올립니다. 합치는 사이에 또 누가 저장할 수 있어 몇 번 반복합니다.
     for(let attempt = 0; attempt < 4; attempt++){
       syncStatus = 'syncing'; syncPhase = 'save'; syncStatusMessage = '저장 중...'; renderSyncStatus();
       // 올리는 동안에도 편집은 계속됩니다. 지금 보내는 내용을 따로 떠 두고
       // 그것만 다음 병합의 기준으로 삼아야 그 사이 편집분이 기준에 섞이지 않습니다.
       const snapshot = cloneState(state);
-      let result = {};
+      const stamp = new Date().toISOString();
+      let conflict = null;
+      let wroteRev = null;
       try{
-        const payload = Object.assign({}, snapshot, {_dept: deptId, _work: workId, _key: adminKey, _baseRev: remoteRev, _force: force});
-        const res = await fetch(syncUrl, {
-          method:'POST',
-          headers:{'Content-Type':'text/plain;charset=utf-8'},
-          body: JSON.stringify(payload)
-        });
-        try{ result = await res.json(); }catch(e){ result = {}; }
-        if(result && result.conflict){
-          // 그 사이 다른 사람이 먼저 저장했습니다. 묻지 않고 합친 뒤 다시 올립니다.
-          if(mergeRemoteInto(sanitizeState(result.data), result.rev, result.updatedAt)){
-            force = false;
-            continue;
+        await fb.runTransaction(fb.db, async function(tx){
+          const snap = await tx.get(ref);
+          const cur = snap.exists() ? (snap.data() || {}) : null;
+          const curRev = (cur && typeof cur.rev === 'number') ? cur.rev : 0;
+          // 내가 마지막으로 읽은 리비전과 다르면 그 사이 누가 저장한 것입니다.
+          if(!force && remoteRev !== null && curRev !== remoteRev){
+            conflict = {data: cur, rev: curRev, updatedAt: (cur && cur.updatedAt) || ''};
+            return;
           }
-          handleConflict(result);
+          wroteRev = curRev + 1;
+          tx.set(ref, {
+            groups: snapshot.groups,
+            products: snapshot.products || [],
+            rev: wroteRev,
+            updatedAt: stamp
+          });
+        });
+      }catch(e){
+        if(e && e.code === 'permission-denied'){
+          noteWriteDenied();
           return false;
         }
-        if(result && result.authRequired && result.ok === false){
-          dropAdminOnAuthFail();
-          throw new Error(result.error || '관리자 열쇠가 필요합니다');
-        }
-        if(!res.ok || result.ok===false) throw new Error(result.error || ('HTTP '+res.status));
-      }catch(e){
         syncStatus = 'error';
-        syncStatusMessage = '저장하지 못했습니다: '+e.message+' · 연결되면 자동으로 다시 시도합니다';
-        console.warn('원격 동기화 저장 실패:', e);
+        syncStatusMessage = '저장하지 못했습니다: '+((e && e.message) || e)+' · 연결되면 자동으로 다시 시도합니다';
+        console.warn('Firestore 저장 실패:', e);
         scheduleRetry();
         renderSyncStatus();
         return false;
       }
-      if(typeof result.rev === 'number'){
-        remoteRev = result.rev;
-        remoteUpdatedAt = typeof result.updatedAt === 'string' ? result.updatedAt : '';
-        conflictSupported = true;
-      } else {
-        // 구버전 Code.gs. 저장은 되지만 동시 편집을 막아주지는 못합니다.
-        conflictSupported = false;
+
+      if(conflict){
+        // 묻지 않고 합친 뒤 다시 올립니다.
+        if(mergeRemoteInto(sanitizeState(conflict.data), conflict.rev, conflict.updatedAt)){
+          force = false;
+          continue;
+        }
+        handleConflict(conflict);
+        return false;
       }
-      // 서버에 들어간 내용이 곧 다음 병합의 기준입니다.
+
+      remoteRev = wroteRev;
+      remoteUpdatedAt = stamp;
       setBaseState(snapshot);
       pendingLocalChange = false;
       clearRetry();
       syncBlocked = false;
       syncStatus = 'ok';
-      syncStatusMessage = (lastMergeNote ? lastMergeNote + ' · ' : '') + '저장됨 ' + nowKST() +
-        (conflictSupported ? '' : ' · 동시편집 감지 미지원(Code.gs 업데이트 필요)');
+      syncStatusMessage = (lastMergeNote ? lastMergeNote + ' · ' : '') + '저장됨 ' + nowKST();
       lastMergeNote = '';
       renderSyncStatus();
       return true;
     }
-    // 네 번을 연달아 밀렸습니다. 누가 아주 빠르게 저장하고 있다는 뜻이라 잠시 뒤 다시 봅니다.
     syncStatus = 'error';
     syncStatusMessage = '다른 사람의 저장이 계속 겹쳐 잠시 후 다시 시도합니다';
     scheduleRetry();
@@ -1515,25 +1527,23 @@
     return false;
   }
 
-  // 사용자가 직접 "저장"/"지금 동기화"를 누른 경우. 업로드가 막힌 상태라면
-  // 서버를 먼저 다시 읽어보고, 어느 쪽을 남길지 분명히 물어본 뒤에만 덮어씁니다.
+  // 사용자가 배지를 눌렀을 때. 먼저 읽어 합친 뒤 올립니다.
   async function requestPush(){
-    if(!syncUrl) return;
+    if(!docId) return;
     if(!canEdit()){
-      alert('조회 전용 모드에서는 서버에 저장할 수 없습니다.' + String.fromCharCode(10) +
-        '기능모음 → 관리자 모드에서 열쇠를 입력해주세요.');
+      alert('조회 전용입니다.' + String.fromCharCode(10) +
+        '기능모음 → 관리자 모드에서 구글 로그인해주세요.');
       return;
     }
     clearTimeout(syncTimer);
-    syncStatus = 'syncing'; syncStatusMessage = '서버 상태 확인 중...'; renderSyncStatus();
+    syncStatus = 'syncing'; syncPhase = 'check'; syncStatusMessage = '서버 상태 확인 중...'; renderSyncStatus();
     let remote = null;
     try{
       remote = await fetchRemoteState();
     }catch(e){
       syncStatus = 'error';
-      syncStatusMessage = '서버에 연결할 수 없어 저장하지 못했습니다: '+e.message;
+      syncStatusMessage = '서버에 연결할 수 없어 저장하지 못했습니다: '+((e && e.message) || e);
       renderSyncStatus();
-      alert('동기화 서버에 연결할 수 없어 올리지 못했습니다.\n작업 내용은 이 브라우저에 저장되어 있으니, 연결이 복구된 뒤 다시 시도해주세요.');
       return;
     }
     // 합칠 기준이 있으면 묻지 않습니다. 양쪽 작업을 모두 남기는 쪽이 항상 낫습니다.
@@ -1544,7 +1554,6 @@
       return;
     }
     // 이 브라우저가 서버를 한 번도 읽은 적이 없으면 무엇이 내 변경인지 알 수 없습니다.
-    // 기준이 없는 이때만 어느 쪽을 남길지 물어봅니다.
     remoteRev = remote.rev;
     remoteUpdatedAt = remote.updatedAt;
     const overwriteServer = await showChoiceModal({
@@ -1564,24 +1573,16 @@
     }
   }
 
-  // 부서를 빠르게 연달아 바꾸면 이전 부서의 응답이 나중에 도착할 수 있습니다.
-  // 그 응답을 지금 부서에 합쳐 버리면 남의 부서 내용이 섞이고, 그대로 서버에
-  // 올라갑니다. 순번을 달아 두고 뒤늦은 응답은 버립니다.
-  let deptSeq = 0;
-
   // 화면은 이미 캐시로 그려 둔 상태에서 서버 내용을 받아 반영합니다.
-  // 기다리는 사이에 고친 내용이 있을 수 있어 덮어쓰지 않고 합칩니다.
-  async function refreshFromServer(turn){
-    if(!syncUrl){ pushHold = false; return; }
+  async function refreshFromServer(){
+    if(!docId){ pushHold = false; return; }
     syncStatus = 'syncing'; renderSyncStatus();
     try{
-      const remote = await fetchRemoteWithRetry();
-      if(turn !== deptSeq) return;          // 그새 다른 부서로 옮겼습니다
+      const remote = await fetchRemoteState();
       pushHold = false;
       syncBlocked = false;
       const merged = mergeRemoteInto(remote.state, remote.rev, remote.updatedAt);
       if(!merged){
-        // 이 브라우저가 그 부서를 처음 봅니다. 합칠 기준이 없으니 그대로 받습니다.
         adoptRemote(remote.state, remote.rev, remote.updatedAt);
         return;
       }
@@ -1592,8 +1593,6 @@
       lastMergeNote = '';
       if(merged === 'dirty') debouncedRemoteSync();
     }catch(e){
-      if(turn !== deptSeq) return;          // 그새 다른 부서로 옮겼습니다
-      // 못 받았습니다. 캐시를 보여 주되 업로드는 계속 막아 둡니다.
       pushHold = false;
       syncBlocked = true;
       syncStatus = 'error';
@@ -1601,66 +1600,34 @@
           ? '서버에서 불러오지 못해 이 브라우저에 저장된 내용을 표시 중입니다. '
           : '서버에서 불러오지 못했고 이 브라우저에 저장된 내용도 없습니다. ') +
         '팀 데이터를 보호하기 위해 자동 업로드를 중지했습니다. ' +
-        '연결이 돌아오면 자동으로 합쳐 올립니다. 바로 시도하려면 이 배지를 클릭하세요. ('+e.message+')';
-      console.warn('부서 내용 불러오기 실패:', e);
+        '연결이 돌아오면 자동으로 합쳐 올립니다. 바로 시도하려면 이 배지를 클릭하세요. ('+((e && e.message) || e)+')';
+      console.warn('Firestore 불러오기 실패:', e);
     }
     renderSyncStatus();
   }
 
-  /* ---- 주기적으로 서버를 살펴 다른 사람의 변경을 미리 받아옵니다 ---- */
-  // 충돌을 나중에 푸는 것보다, 애초에 갈라지지 않게 하는 쪽이 낫습니다.
-  // Apps Script 는 한 번 부르는 데 2~4초가 고정으로 듭니다. 데이터 양과는
-  // 무관해서 줄일 수 있는 건 호출 횟수뿐입니다. 아무 변화가 없으면 간격을
-  // 늘리고, 뭔가 움직이면 곧바로 20초로 돌아옵니다.
-  const POLL_MIN = 20000;
-  // 상한을 짧게 둡니다. 간격이 길어지면 내가 아는 리비전이 낡아서, 그 사이
-  // 남이 저장했으면 충돌 → 병합 → 재전송으로 저장이 두 번 나갑니다.
-  // 조회 한 번 아끼려다 저장이 길어지면 손해입니다.
-  const POLL_MAX = 40000;
-  let pollEvery = POLL_MIN;
-  let pollTimer = null;
-
-  function startPolling(){
-    clearTimeout(pollTimer);
-    if(!syncUrl) return;
-    pollTimer = setTimeout(function(){
-      pollRemote().then(startPolling, startPolling);
-    }, pollEvery);
-  }
-
-  // 남이 고쳤거나 내가 고쳤으면 다시 촘촘히 봅니다.
-  function quickenPolling(){
-    if(pollEvery === POLL_MIN) return;
-    pollEvery = POLL_MIN;
-    startPolling();
-  }
-
-  // 리비전만 물어봅니다. 전체를 받는 것보다 서버 부담이 훨씬 적습니다.
-  // 구버전 Code.gs 는 action 을 무시하고 전체를 주는데 거기에도 rev 가 있어 그대로 동작합니다.
-  async function fetchRemoteRev(){
-    const res = await fetch(syncUrlWithDept() + '&action=rev', {method:'GET', cache:'no-store'});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    return (data && typeof data.rev === 'number') ? data.rev : null;
-  }
-
-  async function pollRemote(){
-    if(!syncUrl || document.hidden) return;
-    // 내 변경이 올라가는 중이면 그것부터 끝냅니다. 곧 합쳐질 내용을 미리 당길 이유가 없습니다.
-    if(pushing || pendingLocalChange) return;
-    try{
-      const rev = await fetchRemoteRev();
-      if(rev !== null && rev === remoteRev && !syncBlocked){
-        pollEvery = Math.min(pollEvery * 2, POLL_MAX);
-        return;
-      }
-      pollEvery = POLL_MIN;
-      const remote = await fetchRemoteState();
-      const merged = mergeRemoteInto(remote.state, remote.rev, remote.updatedAt);
+  /* ---- 남의 변경은 서버가 밀어 줍니다. 되물을 필요가 없습니다 ---- */
+  let unsubscribeRemote = null;
+  async function subscribeRemote(){
+    if(unsubscribeRemote){ unsubscribeRemote(); unsubscribeRemote = null; }
+    if(!docId) return;
+    const fb = await firebaseReady();
+    const ref = docRefOr(fb);
+    if(!ref) return;
+    unsubscribeRemote = fb.onSnapshot(ref, function(snap){
+      // 내가 방금 쓴 것이 되돌아온 것은 무시합니다.
+      if(snap.metadata && snap.metadata.hasPendingWrites) return;
+      if(!snap.exists()) return;
+      const data = snap.data() || {};
+      const rev = (typeof data.rev === 'number') ? data.rev : 0;
+      if(remoteRev !== null && rev === remoteRev) return;
+      const clean = sanitizeState(data);
+      if(!clean) return;
+      // 올리는 중이면 그 결과가 곧 정리해 줍니다.
+      if(pushing || pushHold) return;
+      const merged = mergeRemoteInto(clean, rev, (typeof data.updatedAt === 'string') ? data.updatedAt : '');
       if(!merged){
-        // 기준이 없는 첫 연결입니다. 서버 것을 그대로 받습니다.
-        adoptRemote(remote.state, remote.rev, remote.updatedAt);
-        setBaseState(remote.state);
+        adoptRemote(clean, rev, data.updatedAt || '');
         return;
       }
       syncBlocked = false;
@@ -1670,15 +1637,16 @@
       syncStatusMessage = (lastMergeNote || '최신 상태') + ' · ' + nowKST();
       lastMergeNote = '';
       renderSyncStatus();
-    }catch(e){
-      // 한 번 실패는 조용히 넘어갑니다. 다음 주기에 다시 봅니다.
-    }
+    }, function(err){
+      console.warn('실시간 구독 오류:', err);
+      syncStatus = 'error';
+      syncStatusMessage = '변경 알림이 끊겼습니다 · 배지를 눌러 다시 불러올 수 있습니다';
+      renderSyncStatus();
+    });
   }
 
   function debouncedRemoteSync(){
-    if(!syncUrl || syncBlocked || pushHold || suppressRemotePush) return;
-    // 내가 고치는 중이면 남도 고치고 있을 가능성이 큽니다.
-    quickenPolling();
+    if(!docId || syncBlocked || pushHold || suppressRemotePush) return;
     pendingLocalChange = true;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(function(){ syncTimer = null; pushRemoteState(); }, 1200);
@@ -1687,7 +1655,7 @@
   function renderSyncStatus(){
     const badge = document.getElementById('syncBadge');
     if(badge){
-      if(!syncUrl){
+      if(!docId){
         // 예전에는 배지를 숨기고 "동기화 설정"에서 안내했습니다. 그 화면이
         // 없어졌으니 무엇을 해야 하는지는 배지가 말해 줘야 합니다.
         badge.style.display = 'inline-flex';
@@ -3813,7 +3781,7 @@
     loadSyncUrl();
     // 서버를 못 읽어도 지난번 기준이 있으면 나중에 합칠 수 있습니다.
     loadBaseState();
-    if(!syncUrl){
+    if(!docId){
       // 연결이 없으면 예전 그대로입니다. 처음 온 사람에게는 예시 데이터를 보여 줍니다.
       load();
       return;
@@ -3835,7 +3803,6 @@
   loadHolidayStorage();
   loadGanttPref();
   loadViewPrefs();
-  loadAdminKey();
   // 입력 중이라 미뤄 둔 서버 변경을, 칸을 벗어나는 즉시 화면에 반영합니다.
   document.getElementById('wbsTable').addEventListener('focusout', function(){
     if(!pendingRemoteRender) return;
@@ -3845,27 +3812,17 @@
     }, 0);
   });
 
-  // 탭을 다시 보는 순간 남의 변경부터 받아옵니다. 20초를 기다릴 이유가 없습니다.
+  // 변경은 서버가 밀어 주므로 되물을 일이 없습니다. 다만 오래 자리를 비운 사이
+  // 구독이 끊겼을 수 있어, 돌아왔을 때 한 번 확인합니다.
   document.addEventListener('visibilitychange', function(){
-    if(document.hidden) return;
-    quickenPolling();
-    pollRemote();
-  });
-  // 창을 다시 잡았을 때도 마찬가지입니다. 보고 있는 화면이 낡아 있으면 안 됩니다.
-  window.addEventListener('focus', function(){
-    quickenPolling();
-    pollRemote();
+    if(!document.hidden && docId && !pushing) subscribeRemote();
   });
 
-  // 자동 저장이 아직 안 올라간 채로 탭을 닫으면 그 편집이 서버에 없습니다.
-  // 떠나면서 한 번 더 보냅니다. 그 사이 남이 먼저 저장했다면 서버가 리비전으로 막습니다.
+  // 아직 못 올린 편집이 있는 채로 닫으면 그 변경이 서버에 없습니다.
   window.addEventListener('pagehide', function(){
-    if(!syncUrl || !canEdit() || syncBlocked || !pendingLocalChange) return;
-    if(!navigator.sendBeacon) return;
-    try{
-      const payload = Object.assign({}, state, {_dept: deptId, _work: workId, _key: adminKey, _baseRev: remoteRev});
-      navigator.sendBeacon(syncUrl, new Blob([JSON.stringify(payload)], {type:'text/plain;charset=utf-8'}));
-    }catch(e){}
+    if(!docId || !canEdit() || syncBlocked || !pendingLocalChange) return;
+    clearTimeout(syncTimer);
+    pushRemoteState();
   });
 
   bootState();
@@ -3876,10 +3833,10 @@
   renderAuthUi();
 
   // 여기서부터는 기다려도 화면이 비어 있지 않습니다.
-  refreshFromServer(deptSeq).then(function(){
+  refreshFromServer().then(function(){
     renderSyncStatus();
     renderAuthUi();
-    startPolling();
+    subscribeRemote();
   });
 })();
 </script>

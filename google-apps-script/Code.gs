@@ -234,8 +234,10 @@ function getSheet_(deptIdArg, workIdArg) {
   if (!sheet) {
     sheet = ss.insertSheet(name);
     sheet.getRange('A1').setValue('{"groups":[]}');
-    sheet.getRange('A1').setNote('WBS 데이터 (JSON) - 직접 수정하지 마세요');
     sheet.getRange('C1').setValue(0);
+    // 메모는 여기서 한 번만 붙인다. 저장할 때마다 다시 쓰면 그만큼 느려진다.
+    sheet.getRange('A1').setNote('WBS 데이터 (JSON) - 직접 수정하지 마세요');
+    sheet.getRange('B1').setNote('마지막 저장 시각');
     sheet.getRange('C1').setNote('리비전 번호 - 직접 수정하지 마세요');
   }
   return sheet;
@@ -475,13 +477,13 @@ function saveData_(parsed) {
   delete parsed._key;
 
   var nextRev = currentRev + 1;
-  sheet.getRange('A1').setValue(JSON.stringify(parsed));
-  sheet.getRange('B1').setValue(new Date());
-  sheet.getRange('B1').setNote('마지막 저장 시각');
-  sheet.getRange('C1').setValue(nextRev);
-  sheet.getRange('C1').setNote('리비전 번호 - 직접 수정하지 마세요');
+  var now = new Date();
+  // A1·B1·C1 을 한 번에 쓴다. 따로 쓰면 그때마다 시트 서버까지 다녀오느라
+  // 저장이 그만큼 길어진다. 메모는 시트를 만들 때 붙여 뒀으므로 건드리지 않는다.
+  sheet.getRange('A1:C1').setValues([[JSON.stringify(parsed), now, nextRev]]);
   SpreadsheetApp.flush();
 
+  // 방금 쓴 값을 다시 읽지 않는다. 읽어 봐야 같은 값이고 왕복만 한 번 더 든다.
   return json_({ ok: true, dept: deptId, work: workId, rev: nextRev,
-                 updatedAt: readUpdatedAt_(sheet) });
+                 updatedAt: now.toISOString() });
 }

@@ -297,6 +297,19 @@
   tr.group-row, tr.task-row{cursor:grab;}
   tr.group-row input, tr.task-row input, tr.group-row select, tr.task-row select, tr.group-row button, tr.task-row button{cursor:auto;}
   tr.dragging{opacity:.35;}
+  /* 순번 앞 손잡이. 줄 어디를 잡아도 끌 수 있지만, 잡을 곳이 눈에 보여야
+     순서를 바꿀 수 있다는 걸 알 수 있습니다. */
+  .drag-handle{
+    flex:0 0 auto; color:var(--sub); opacity:.4; font-size:12px; line-height:1;
+    padding:2px 1px; cursor:grab; user-select:none;
+  }
+  .drag-handle:hover{opacity:.95; color:var(--accent);}
+  tr.dragging .drag-handle{cursor:grabbing;}
+  /* 끌 수 없는 줄(완료 그룹). 왜 안 되는지는 손잡이의 툴팁이 말해 줍니다. */
+  .drag-handle.locked, .drag-handle.locked:hover{opacity:.18; color:var(--sub); cursor:default;}
+  body.readonly .drag-handle{display:none;}
+  /* 놓으면 여기로 간다는 표시 */
+  tr.drop-target > td{box-shadow:inset 0 2px 0 0 var(--accent);}
   .collapse-toggle{color:inherit; font-size:11px; padding:2px;}
   tr.group-row .collapse-toggle:hover{color:var(--group-text-muted);}
   tr.task-row:hover td{background:var(--hover-tint);}
@@ -905,6 +918,7 @@
   function lockRow(tr){
     if(canEdit()) return tr;
     tr.draggable = false;
+    tr.classList.add('no-drag');
     tr.querySelectorAll('input').forEach(function(i){ i.readOnly = true; i.tabIndex = -1; });
     tr.querySelectorAll('select').forEach(function(s){ s.disabled = true; });
     // 접기 토글은 화면 조작이라 남기고, 값을 바꾸는 버튼만 없앱니다.
@@ -2491,31 +2505,72 @@
   }
 
   /* ---------------- Table rendering ---------------- */
+  function dragHandle(locked){
+    return el('span', {
+      class: 'drag-handle no-print' + (locked ? ' locked' : ''),
+      'aria-hidden': 'true',
+      title: locked ? '완료 그룹은 맨 아래에 날짜순으로 놓여서 순서를 바꿀 수 없습니다'
+                    : '드래그하여 순서 변경'
+    }, ['\u2630']);
+  }
+
+  // 놓을 자리는 한 번에 한 줄만 표시합니다.
+  let dropTargetRow = null;
+  function setDropTarget(tr){
+    if(dropTargetRow === tr) return;
+    if(dropTargetRow) dropTargetRow.classList.remove('drop-target');
+    dropTargetRow = tr || null;
+    if(dropTargetRow) dropTargetRow.classList.add('drop-target');
+  }
+
+  // 그룹을 '화면에 보이는 순서' 기준으로 옮깁니다. 데이터 인덱스로 옮기면
+  // 조회조건이나 완료 그룹 정렬 때문에 화면에서 본 자리와 어긋납니다.
+  // 조회조건으로 숨어 있는 그룹은 원래 자리를 그대로 지킵니다.
+  function moveGroupTo(dragId, targetId){
+    if(!dragId || dragId === targetId) return false;
+    const shown = visibleRows().rows.map(function(r){ return r.g; });
+    let from = -1, to = -1;
+    shown.forEach(function(g, i){
+      if(g.id === dragId) from = i;
+      if(g.id === targetId) to = i;
+    });
+    if(from < 0 || to < 0 || from === to) return false;
+    const inView = {};
+    shown.forEach(function(g){ inView[g.id] = true; });
+    shown.splice(to, 0, shown.splice(from, 1)[0]);
+    let k = 0;
+    state.groups = state.groups.map(function(g){ return inView[g.id] ? shown[k++] : g; });
+    return true;
+  }
+
   function buildGroupRow(g, gi, displayNo){
-    const tr = el('tr', {class:'group-row', draggable:'true'});
+    // 완료 그룹은 화면에서 맨 아래·날짜순으로 자동 정렬됩니다. 끌어다 놓아도
+    // 자리가 되돌아오므로, 아예 못 끌게 하고 손잡이 툴팁으로 이유를 알려 줍니다.
+    const fixed = isDoneGroup(g);
+    const tr = el('tr', {class:'group-row' + (fixed ? ' no-drag' : ''),
+      'data-gid': g.id, draggable: fixed ? 'false' : 'true'});
     tr.addEventListener('dragstart', function(e){
       if(['INPUT','BUTTON','SELECT','TEXTAREA'].indexOf(e.target.tagName)!==-1){ e.preventDefault(); return; }
-      dragInfo = {type:'group', index:gi};
-      try{ e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(gi)); }catch(err){}
+      dragInfo = {type:'group', id:g.id};
+      try{ e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', g.id); }catch(err){}
       tr.classList.add('dragging');
     });
-    tr.addEventListener('dragend', function(){ tr.classList.remove('dragging'); dragInfo = null; });
+    tr.addEventListener('dragend', function(){ tr.classList.remove('dragging'); dragInfo = null; setDropTarget(null); });
     tr.addEventListener('dragover', function(e){
-      if(dragInfo && dragInfo.type==='group') e.preventDefault();
+      if(dragInfo && dragInfo.type==='group' && !fixed){ e.preventDefault(); setDropTarget(tr); }
     });
     tr.addEventListener('drop', function(e){
+      if(!dragInfo || dragInfo.type!=='group' || fixed) return;
       e.preventDefault();
-      if(!dragInfo || dragInfo.type!=='group') return;
-      const from = dragInfo.index, to = gi;
+      const from = dragInfo.id;
       dragInfo = null;
-      if(from===to) return;
-      const moved = state.groups.splice(from,1)[0];
-      state.groups.splice(to,0,moved);
-      fullRender();
+      setDropTarget(null);
+      if(moveGroupTo(from, g.id)) fullRender();
     });
 
     const noTd = el('td', {class:'col-no'});
     const noWrap = el('div', {style:'display:flex; align-items:center; justify-content:flex-end; gap:4px;'});
+    noWrap.appendChild(dragHandle(fixed));
     const collapsed = isGridCollapsed(g);
     noWrap.appendChild(el('button', {class:'reset-btn collapse-toggle no-print', title: collapsed?'펼치기':'접기', onclick:function(){
       // 접고 펴는 동작은 모두 이 브라우저에만 남습니다. 데이터를 바꾸지 않으므로
@@ -2576,7 +2631,8 @@
   }
 
   function buildTaskRow(g, t, gi, ti, displayNo){
-    const tr = el('tr', {class:'task-row', draggable:'true'});
+    const groupFixed = isDoneGroup(g);
+    const tr = el('tr', {class:'task-row', 'data-gid': g.id, draggable:'true'});
     tr.addEventListener('dragstart', function(e){
       if(['INPUT','BUTTON','SELECT','TEXTAREA'].indexOf(e.target.tagName)!==-1){ e.preventDefault(); return; }
       dragInfo = {type:'task', groupIndex:gi, taskIndex:ti};
@@ -2584,22 +2640,45 @@
       e.stopPropagation();
       tr.classList.add('dragging');
     });
-    tr.addEventListener('dragend', function(){ tr.classList.remove('dragging'); dragInfo = null; });
+    tr.addEventListener('dragend', function(){ tr.classList.remove('dragging'); dragInfo = null; setDropTarget(null); });
     tr.addEventListener('dragover', function(e){
-      if(dragInfo && dragInfo.type==='task' && dragInfo.groupIndex===gi){ e.preventDefault(); e.stopPropagation(); }
+      if(!dragInfo) return;
+      if(dragInfo.type==='task' && dragInfo.groupIndex===gi){
+        e.preventDefault(); e.stopPropagation(); setDropTarget(tr);
+      } else if(dragInfo.type==='group' && !groupFixed){
+        // 그룹 줄은 한 줄뿐이라 정확히 그 위에 놓기가 어렵습니다. 그룹을 끌고
+        // 왔으면 이 업무가 딸린 그룹 자리로 받아 줍니다.
+        e.preventDefault(); e.stopPropagation();
+        setDropTarget(document.querySelector('#wbsBody tr.group-row[data-gid="' + g.id + '"]'));
+      }
     });
     tr.addEventListener('drop', function(e){
-      if(!dragInfo || dragInfo.type!=='task' || dragInfo.groupIndex!==gi) return;
+      if(!dragInfo) return;
+      if(dragInfo.type==='group'){
+        if(groupFixed) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const from = dragInfo.id;
+        dragInfo = null;
+        setDropTarget(null);
+        if(moveGroupTo(from, g.id)) fullRender();
+        return;
+      }
+      if(dragInfo.type!=='task' || dragInfo.groupIndex!==gi) return;
       e.preventDefault();
       e.stopPropagation();
       const from = dragInfo.taskIndex, to = ti;
       dragInfo = null;
+      setDropTarget(null);
       if(from===to) return;
       const moved = g.tasks.splice(from,1)[0];
       g.tasks.splice(to,0,moved);
       fullRender();
     });
-    tr.appendChild(el('td', {class:'col-no'}, [displayNo]));
+    const noWrap = el('div', {style:'display:flex; align-items:center; justify-content:flex-end; gap:4px;'});
+    noWrap.appendChild(dragHandle(false));
+    noWrap.appendChild(el('span', {}, [displayNo]));
+    tr.appendChild(el('td', {class:'col-no'}, [noWrap]));
     // 제품은 그룹이 가집니다. 여기는 비워 둡니다.
     tr.appendChild(el('td', {}, ['']));
     tr.appendChild(el('td', {}, [
@@ -3693,7 +3772,10 @@
     }
   });
   document.addEventListener('mouseup', function(){
-    document.querySelectorAll('#wbsBody tr[draggable]').forEach(function(tr){ tr.draggable = true; });
+    // 완료 그룹과 조회 전용 행은 원래 못 끄는 줄이라 되살리면 안 됩니다.
+    document.querySelectorAll('#wbsBody tr[draggable]').forEach(function(tr){
+      tr.draggable = !tr.classList.contains('no-drag');
+    });
   });
 
   // Close a modal-overlay only when both the mousedown AND the click landed on the

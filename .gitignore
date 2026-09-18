@@ -9,8 +9,11 @@ desktop.ini
 # Original planning document (internal, not meant for the shared repo)
 *.pdf
 
-# Personal snapshot exports (use "JSON 백업/wbs-data.json" for team sync instead)
+# 데이터는 저장소에 두지 않습니다. 공개 저장소라 담당자 실명과 사내 일정이
+# 그대로 드러납니다. 백업은 Firestore 와 각자 PC 에 둡니다.
 *.xlsx
 *.csv
-wbs_*.json
+*.json
+백업파일/
+JSON 백업/
 

@@ -102,6 +102,7 @@
   .filter-panel.hidden{display:none;}
   .filter-panel-row{display:flex; align-items:center; gap:8px;}
   .filter-range{font-size:12.5px; font-weight:600; color:var(--text); white-space:nowrap;}
+  .filter-panel-foot{display:flex; justify-content:flex-end; gap:6px; margin-top:2px;}
   .filter-who{
     font:inherit; font-size:12px; padding:4px 6px; border-radius:6px;
     border:1px solid var(--border); background:var(--panel); color:var(--text);
@@ -483,6 +484,10 @@
           <div class="filter-chips" id="filterRow2"></div>
           <div class="filter-chips" id="filterRow3"></div>
           <div class="filter-chips" id="filterRow4"></div>
+          <div class="filter-panel-foot">
+            <button class="small" id="btnPeriodCancel">취소</button>
+            <button class="primary small" id="btnPeriodOk">확인</button>
+          </div>
         </div>
       </div>
       <span class="filter-label">제품</span>
@@ -1891,18 +1896,24 @@
   }
 
   // 선택한 조회기간의 [시작, 끝]. 'all'이면 null.
-  function periodRange(){
-    const y = periodFilter.year;
-    if(periodFilter.mode === 'all') return null;
+  // 팝업에서 고르는 동안은 여기에만 담아 둡니다. 확인을 눌러야 periodFilter 로
+  // 옮겨 가고, 취소하면 그냥 버립니다. 팝업이 닫혀 있으면 null 입니다.
+  let draftPeriod = null;
+  function shownPeriod(){ return draftPeriod || periodFilter; }
+
+  function periodRange(p){
+    const f = p || periodFilter;
+    const y = f.year;
+    if(f.mode === 'all') return null;
     function span(m0, m1){
       return {from: toISO(new Date(y, m0, 1)), to: toISO(new Date(y, m1+1, 0))};
     }
-    if(periodFilter.mode === 'year') return span(0, 11);
-    if(periodFilter.mode === 'h1') return span(0, 5);
-    if(periodFilter.mode === 'h2') return span(6, 11);
-    const q = /^q([1-4])$/.exec(periodFilter.mode);
+    if(f.mode === 'year') return span(0, 11);
+    if(f.mode === 'h1') return span(0, 5);
+    if(f.mode === 'h2') return span(6, 11);
+    const q = /^q([1-4])$/.exec(f.mode);
     if(q){ const i = (Number(q[1]) - 1) * 3; return span(i, i + 2); }
-    const m = /^m(\d{1,2})$/.exec(periodFilter.mode);
+    const m = /^m(\d{1,2})$/.exec(f.mode);
     if(m){ const i = Number(m[1]) - 1; if(i>=0 && i<=11) return span(i, i); }
     return null;
   }
@@ -1911,8 +1922,9 @@
     return r ? fmtDisplay(r.from) + ' ~ ' + fmtDisplay(r.to) : '전체 기간';
   }
   // 팝업 안에 넣을 짧은 형태. 요일 없이 날짜만 보여 줍니다.
+  // 여기는 확인 전이라도 고르는 중인 값을 비춰 줍니다.
   function periodRangeText(){
-    const r = periodRange();
+    const r = periodRange(shownPeriod());
     return r ? r.from.replace(/-/g, '.') + ' ~ ' + r.to.replace(/-/g, '.') : '전체 기간';
   }
 
@@ -2163,26 +2175,55 @@
 
   function chipIsActive(key){
     const now = new Date().getFullYear();
-    if(key === 'all') return periodFilter.mode === 'all';
-    if(key === 'thisYear') return periodFilter.mode === 'year' && periodFilter.year === now;
-    if(key === 'lastYear') return periodFilter.mode === 'year' && periodFilter.year === now - 1;
-    return periodFilter.mode === key;
+    const f = shownPeriod();
+    if(key === 'all') return f.mode === 'all';
+    if(key === 'thisYear') return f.mode === 'year' && f.year === now;
+    if(key === 'lastYear') return f.mode === 'year' && f.year === now - 1;
+    return f.mode === key;
   }
+  // 고르기만 합니다. 표와 요약은 확인을 눌러야 바뀝니다.
   function applyChip(key){
     const now = new Date().getFullYear();
-    if(key === 'all') periodFilter = {mode:'all', year:periodFilter.year};
-    else if(key === 'thisYear') periodFilter = {mode:'year', year:now};
-    else if(key === 'lastYear') periodFilter = {mode:'year', year:now - 1};
-    else periodFilter = {mode:key, year:periodFilter.year};
-    saveViewPrefs();
-    // 팝업을 닫지 않습니다. 닫으면 상단에 바뀐 기간이 표시되는 걸 볼 수 없습니다.
-    refreshViews();
+    const f = shownPeriod();
+    if(key === 'all') draftPeriod = {mode:'all', year:f.year};
+    else if(key === 'thisYear') draftPeriod = {mode:'year', year:now};
+    else if(key === 'lastYear') draftPeriod = {mode:'year', year:now - 1};
+    else draftPeriod = {mode:key, year:f.year};
+    renderFilterBar();
   }
+
+  function openFilterPanel(){
+    // 지금 걸려 있는 값에서 시작합니다.
+    draftPeriod = {mode: periodFilter.mode, year: periodFilter.year};
+    const panel = document.getElementById('filterPanel');
+    const btn = document.getElementById('btnFilterToggle');
+    if(panel) panel.classList.remove('hidden');
+    if(btn) btn.setAttribute('aria-expanded', 'true');
+    renderFilterBar();
+  }
+  // 고르던 값은 버립니다. 바깥을 누르거나 Esc 로 닫아도 취소와 같습니다.
   function closeFilterPanel(){
+    const panel = document.getElementById('filterPanel');
+    const btn = document.getElementById('btnFilterToggle');
+    const wasOpen = panel && !panel.classList.contains('hidden');
+    if(panel) panel.classList.add('hidden');
+    if(btn) btn.setAttribute('aria-expanded', 'false');
+    if(draftPeriod){
+      draftPeriod = null;
+      if(wasOpen) renderFilterBar();   // 팝업 안 표시를 원래 값으로 되돌립니다
+    }
+  }
+  function confirmFilterPanel(){
+    if(draftPeriod){
+      periodFilter = draftPeriod;
+      draftPeriod = null;
+      saveViewPrefs();
+    }
     const panel = document.getElementById('filterPanel');
     const btn = document.getElementById('btnFilterToggle');
     if(panel) panel.classList.add('hidden');
     if(btn) btn.setAttribute('aria-expanded', 'false');
+    refreshViews();
   }
 
   // 데이터에 등장하는 연도 + 올해 주변을 연도 선택 목록으로 씁니다.
@@ -2190,7 +2231,7 @@
     const now = new Date().getFullYear();
     const set = {};
     [now - 1, now, now + 1].forEach(function(y){ set[y] = true; });
-    set[periodFilter.year] = true;
+    set[shownPeriod().year] = true;
     state.groups.forEach(function(g){
       g.tasks.forEach(function(t){
         [t.start, t.end].forEach(function(s){
@@ -2208,9 +2249,9 @@
       yearSel.innerHTML = '';
       years.forEach(function(y){
         yearSel.appendChild(el('option', Object.assign({value:String(y)},
-          y === periodFilter.year ? {selected:'selected'} : {}), [y + '년']));
+          y === shownPeriod().year ? {selected:'selected'} : {}), [y + '년']));
       });
-      yearSel.disabled = periodFilter.mode === 'all';
+      yearSel.disabled = shownPeriod().mode === 'all';
     }
 
     // 줄바꿈을 flex-wrap에 맡기지 않고 4줄로 고정 배치합니다.
@@ -3768,9 +3809,8 @@
     const panel = document.getElementById('filterPanel');
     toggle.addEventListener('click', function(e){
       e.stopPropagation();
-      const willOpen = panel.classList.contains('hidden');
-      panel.classList.toggle('hidden', !willOpen);
-      toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if(panel.classList.contains('hidden')) openFilterPanel();
+      else closeFilterPanel();
     });
     document.addEventListener('click', function(e){
       if(panel.classList.contains('hidden')) return;
@@ -3828,11 +3868,13 @@
   document.getElementById('filterYear').addEventListener('change', function(e){
     const y = Number(e.target.value);
     if(!y) return;
+    const f = shownPeriod();
     // 전체 보기 상태에서 연도를 고르면 그 해 전체로 전환합니다.
-    periodFilter = {mode: periodFilter.mode === 'all' ? 'year' : periodFilter.mode, year:y};
-    saveViewPrefs();
-    refreshViews();
+    draftPeriod = {mode: f.mode === 'all' ? 'year' : f.mode, year:y};
+    renderFilterBar();
   });
+  document.getElementById('btnPeriodOk').addEventListener('click', confirmFilterPanel);
+  document.getElementById('btnPeriodCancel').addEventListener('click', closeFilterPanel);
   (function(){
     const toggle = document.getElementById('btnCollapseMenu');
     const panel = document.getElementById('collapseMenu');

@@ -1357,8 +1357,9 @@
     if(!ref) throw new Error('연결이 없습니다');
     const snap = await fb.getDoc(ref);
     if(!snap.exists()){
-      // 아직 아무것도 없는 새 문서입니다. 빈 상태로 시작합니다.
-      return { state: {groups: [], products: []}, rev: 0, updatedAt: '' };
+      // 아직 만들어지지 않은 문서입니다. 빈 내용과 구분해서 알려 줘야
+      // 처음 올리는 경우에 화면 내용을 지워 버리지 않습니다.
+      return { state: {groups: [], products: []}, rev: 0, updatedAt: '', exists: false };
     }
     const data = snap.data() || {};
     const clean = sanitizeState(data);
@@ -1366,7 +1367,8 @@
     return {
       state: clean,
       rev: (typeof data.rev === 'number') ? data.rev : 0,
-      updatedAt: (typeof data.updatedAt === 'string') ? data.updatedAt : ''
+      updatedAt: (typeof data.updatedAt === 'string') ? data.updatedAt : '',
+      exists: true
     };
   }
 
@@ -1581,6 +1583,25 @@
       const remote = await fetchRemoteState();
       pushHold = false;
       syncBlocked = false;
+      if(remote.exists === false && state.groups.length){
+        // 아직 문서가 없는데 화면에는 내용이 있습니다. 옮겨 오는 첫 저장입니다.
+        // 여기서 빈 서버 내용을 받아들이면 방금 가져온 데이터가 사라집니다.
+        if(!canEdit()){
+          // 올릴 권한이 없으면 그대로 둡니다. "저장 중"에 멈춰 있으면 안 됩니다.
+          syncStatus = 'error';
+          syncStatusMessage = '서버에 아직 내용이 없습니다. 화면 내용은 이 브라우저에만 있습니다 · ' +
+            '기능모음 → 관리자 모드에서 로그인하면 올라갑니다';
+          renderSyncStatus();
+          return;
+        }
+        remoteRev = null;          // 비교할 리비전이 없으니 그대로 올립니다
+        remoteUpdatedAt = '';
+        syncStatus = 'syncing'; syncPhase = 'save';
+        syncStatusMessage = '서버에 처음 올리는 중...';
+        renderSyncStatus();
+        await pushRemoteState();
+        return;
+      }
       const merged = mergeRemoteInto(remote.state, remote.rev, remote.updatedAt);
       if(!merged){
         adoptRemote(remote.state, remote.rev, remote.updatedAt);

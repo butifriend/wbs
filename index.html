@@ -2,11 +2,18 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="refresh" content="0; url=wbs.html">
 <title>WBS 일정 관리</title>
-<script>location.replace('wbs.html');</script>
+<!--
+  /wbs/ 로 들어오면 wbs.html 로 넘겨줍니다.
+  ?s=<문서ID> 같은 파라미터를 반드시 같이 넘겨야 합니다. 떨어뜨리면 연결 링크가
+  그냥 맨 주소로 열려서 "연결 안 됨" 이 됩니다. (meta refresh 는 이걸 못 해서 뺐습니다)
+-->
+<script>location.replace('wbs.html' + location.search + location.hash);</script>
 </head>
 <body>
-<p>이동 중입니다... 자동으로 넘어가지 않으면 <a href="wbs.html">여기를 클릭</a>하세요.</p>
+<p>이동 중입니다... 자동으로 넘어가지 않으면 <a id="go" href="wbs.html">여기를 클릭</a>하세요.</p>
+<script>
+  document.getElementById('go').href = 'wbs.html' + location.search + location.hash;
+</script>
 </body>
 </html>

@@ -3512,7 +3512,12 @@
       grow.push({col:0, value:String(gi+1), style:2});
       grow.push({col:1, value:g.category||'', style:2});
       grow.push({col:2, value:g.title||'(제목없음)', style:2});
-      grow.push({col:statusCol, value:'', style:2});
+      // 그룹 줄은 주차 칸에 막대가 없습니다. 제목을 상태 열까지 한 칸으로 합쳐
+      // 제목이 잘리지 않고 그룹 구분도 또렷해집니다.
+      // 병합에 들어가는 칸은 비어 있더라도 같은 서식으로 적어 둡니다.
+      // 빼먹으면 엑셀이 그 구간을 서식 없이 그립니다.
+      for(let c = 3; c <= statusCol; c++) grow.push({col:c, value:'', style:2});
+      merges.push(colLetter(2)+(cellsByRow.length+1)+':'+colLetter(statusCol)+(cellsByRow.length+1));
       cellsByRow.push(grow);
 
       g.tasks.forEach(function(t, ti){
@@ -3534,7 +3539,10 @@
     cellsByRow.forEach(function(rowCells, ri){
       const r = ri+1;
       let cellsXml = '';
-      rowCells.forEach(function(cell){
+      // 엑셀은 한 줄 안의 칸이 열 순서대로 오기를 기대합니다. 어긋나면 파일을
+      // 열 때 "복구할 수 없는 내용" 으로 거부하기도 합니다. 머리글 줄은 상태 칸을
+      // 월 칸보다 먼저 넣고 있어 실제로 어긋나 있었습니다.
+      rowCells.slice().sort(function(a, b){ return a.col - b.col; }).forEach(function(cell){
         const ref = colLetter(cell.col)+r;
         if(cell.value === '' || cell.value == null){
           cellsXml += '<c r="'+ref+'" s="'+cell.style+'"/>';

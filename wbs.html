@@ -3578,14 +3578,25 @@
 
   document.getElementById('btnAddGroup').addEventListener('click', function(){
     const g = makeGroup();
+    // 제품으로 걸러 보는 중이면 그 제품으로 만들어 둡니다. 그 제품 일을 추가하는
+    // 중일 테니 맞는 값이고, 이렇게 해야 조회조건을 풀지 않아도 새 그룹이 보입니다.
+    if(productFilter) g.product = productFilter;
     g.tasks.push(makeTask());
     state.groups.push(g);
-    // 필터가 걸려 있으면 새 그룹이 곧바로 걸러져 사라져 보입니다. 전체로 되돌립니다.
+    // 나머지 조건은 새 그룹이 걸릴 수가 없어서, 그대로 두면 방금 만든 그룹이
+    // 걸러져 사라져 보입니다. 그것만 풉니다.
     if(periodFilter.mode !== 'all'){
       periodFilter = {mode:'all', year:periodFilter.year};
       saveViewPrefs();
     }
-    if(anyFilterOn()) clearExtraFilters();
+    if(assigneeFilters.length || searchText.trim()){
+      assigneeFilters = [];
+      searchText = '';
+      const box = document.getElementById('filterSearch');
+      if(box) box.value = '';
+      closeAssigneePanel();
+      saveViewPrefs();
+    }
     fullRender();
   });
   document.getElementById('syncBadge').addEventListener('click', function(){

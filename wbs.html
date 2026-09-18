@@ -59,13 +59,6 @@
   }
   .auth-badge[data-role="admin"]{color:var(--st-progress); background:var(--st-progress-bg);}
 
-  .dept-wrap{display:inline-flex; align-items:center; gap:6px; flex:0 0 auto;}
-  .dept-label{font-size:12px; font-weight:700; color:var(--sub); white-space:nowrap;}
-  .dept-select{
-    width:auto; flex:0 0 auto; padding:6px 8px; font-size:13px; font-weight:600;
-    border:1px solid var(--border); border-radius:8px; background:var(--panel); color:var(--text);
-  }
-  .dept-select:hover{border-color:var(--accent);}
 
   .menu-wrap{position:relative;}
   .menu-toggle{white-space:nowrap;}
@@ -124,6 +117,18 @@
     color:var(--text); width:190px; padding:1px 0;
   }
   .filter-search:focus-within{border-color:var(--accent);}
+  .who-toggle{gap:6px; min-width:96px; justify-content:space-between;}
+  .who-panel{
+    width:220px; max-height:260px; overflow-y:auto; gap:0; padding:6px;
+  }
+  .who-panel .who-row{
+    display:flex; align-items:center; gap:7px; padding:5px 6px;
+    border-radius:6px; cursor:pointer; font-size:12.5px; color:var(--text);
+  }
+  .who-panel .who-row:hover{background:var(--hover-tint);}
+  .who-panel .who-row input{margin:0; cursor:pointer;}
+  .who-panel .who-sep{height:1px; background:var(--border); margin:5px 2px;}
+  .who-panel .who-empty{padding:8px 6px; font-size:12px; color:var(--sub);}
   .filter-reset{font-size:11.5px; padding:3px 8px;}
   .filter-reset.hidden{display:none;}
 
@@ -407,14 +412,6 @@
   <p class="desc">시작일과 M/D(공수)를 입력하면 대한민국 공휴일과 주말을 제외한 영업일 기준으로 종료일이 자동 계산됩니다.</p>
 
   <div class="toolbar no-print">
-    <label class="dept-wrap" id="deptWrap" style="display:none;">
-      <span class="dept-label">부서</span>
-      <select class="dept-select" id="deptSelect"></select>
-    </label>
-    <label class="dept-wrap" id="workWrap" style="display:none;">
-      <span class="dept-label">업무</span>
-      <select class="dept-select" id="workSelect"></select>
-    </label>
     <div class="spacer"></div>
     <span id="authBadge" class="auth-badge" style="display:none;"></span>
     <button class="primary admin-only" id="btnAddGroup">+ 그룹 추가</button>
@@ -422,18 +419,6 @@
     <div class="menu-wrap" id="menuWrap">
       <button id="btnMenuToggle" class="menu-toggle">기능모음 ▾</button>
       <div class="menu-panel hidden" id="menuPanel">
-        <div class="menu-group" id="deptMenuGroup" style="display:none;">
-          <div class="menu-label">부서</div>
-          <button class="admin-only" id="btnDeptAdd">부서 추가</button>
-          <button class="admin-only" id="btnDeptRename">부서 이름 변경</button>
-          <button class="danger admin-only" id="btnDeptRemove">부서 목록에서 제거</button>
-        </div>
-        <div class="menu-group" id="workMenuGroup" style="display:none;">
-          <div class="menu-label">업무</div>
-          <button class="admin-only" id="btnWorkAdd">업무 추가</button>
-          <button class="admin-only" id="btnWorkRename">업무 이름 변경</button>
-          <button class="danger admin-only" id="btnWorkRemove">업무 목록에서 제거</button>
-        </div>
         <div class="menu-group">
           <div class="menu-label">권한</div>
           <button id="btnAdminOn">관리자 모드</button>
@@ -490,7 +475,12 @@
       <span class="filter-label">제품</span>
       <select class="filter-who" id="filterProduct"></select>
       <span class="filter-label">담당자</span>
-      <select class="filter-who" id="filterAssignee"></select>
+      <div class="filter-pop-wrap">
+        <button class="filter-toggle who-toggle" id="btnAssigneeToggle" aria-expanded="false">
+          <span id="assigneeLabel">전체</span><span aria-hidden="true">▾</span>
+        </button>
+        <div class="filter-panel who-panel hidden" id="assigneePanel"></div>
+      </div>
       <div class="filter-search">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><line x1="10.4" y1="10.4" x2="14" y2="14"/></svg>
         <input type="search" id="filterSearch" placeholder="구분 · 상세업무 · 담당자 검색" autocomplete="off">
@@ -897,8 +887,6 @@
     const off = document.getElementById('btnAdminOff');
     if(on) on.style.display = adminKey ? 'none' : '';
     if(off) off.style.display = adminKey ? '' : 'none';
-    renderDeptSelect();
-    renderWorkSelect();
   }
 
   async function enterAdminMode(){
@@ -939,353 +927,16 @@
     renderAuthUi();
   }
 
-  /* ---------------- 부서 (동기화 시트별 분리) ---------------- */
-  // 부서 목록은 구글 시트의 _Depts 시트에 있고, 선택한 부서만 각자 브라우저에 기억합니다.
-  // 부서마다 데이터 시트와 리비전이 따로라 충돌 감지도 부서별로 동작합니다.
-  const DEPT_KEY = 'wbs_dept_v1';
+  /* ---------------- 시트 위치 (고정) ---------------- */
+  // 화면에서 부서·업무를 고르는 기능을 걷어냈습니다. 서버(Code.gs)와 구글 시트는
+  // 그대로 두었으므로 데이터는 남아 있고, 필요하면 화면만 되살리면 됩니다.
+  // 여기서는 늘 기본 부서 / 기본 업무(= 예전부터 쓰던 Data 시트)만 봅니다.
   const DEFAULT_DEPT = 'default';
-  let deptId = DEFAULT_DEPT;
-  let depts = [{id: DEFAULT_DEPT, name: '기본'}];
-
-  function loadDeptPref(){
-    try{ deptId = localStorage.getItem(DEPT_KEY) || DEFAULT_DEPT; }catch(e){ deptId = DEFAULT_DEPT; }
-  }
-  function saveDeptPref(){
-    try{ localStorage.setItem(DEPT_KEY, deptId); }catch(e){}
-  }
-  function deptName(id){
-    for(let i = 0; i < depts.length; i++) if(depts[i].id === id) return depts[i].name;
-    return id;
-  }
-  // 로컬 보관도 부서별로 나눠 둡니다. 부서를 바꿔도 서로 덮어쓰지 않습니다.
-  // 부서 목록은 서버에만 있습니다. 기억해 두지 않으면 첫 응답이 올 때까지
-  // 툴바에 "기본" 한 줄만 떠 있다가 갑자기 바뀝니다.
-  const DEPT_LIST_KEY = 'wbs_depts_v1';
-  function saveDeptList(){
-    try{ localStorage.setItem(DEPT_LIST_KEY, JSON.stringify(depts)); }catch(e){}
-  }
-  function loadDeptList(){
-    try{
-      const raw = localStorage.getItem(DEPT_LIST_KEY);
-      if(!raw) return;
-      const list = JSON.parse(raw);
-      if(Array.isArray(list) && list.length) depts = list;
-    }catch(e){}
-  }
-
-  /* ---------------- 업무 (부서 안에서 다시 분리) ---------------- */
-  // 부서와 같은 구조를 한 단계 아래에 얹었습니다. 업무마다 시트와 리비전이 따로라
-  // 충돌 감지도 업무별로 동작합니다. "기본" 업무는 등록 없이 늘 존재하고,
-  // 그 부서가 원래 쓰던 시트가 곧 기본 업무입니다.
-  const WORK_KEY = 'wbs_work_v1';
-  const WORK_LIST_KEY = 'wbs_works_v1';
   const DEFAULT_WORK = 'default';
-  let workId = DEFAULT_WORK;
-  let works = [{id: DEFAULT_WORK, name: '기본'}];
+  const deptId = DEFAULT_DEPT;
+  const workId = DEFAULT_WORK;
 
-  // 부서마다 마지막으로 보던 업무를 따로 기억합니다. 부서를 오갈 때마다
-  // 기본으로 되돌아가면 번거롭습니다.
-  function readMap(key){
-    try{
-      const raw = localStorage.getItem(key);
-      const m = raw ? JSON.parse(raw) : null;
-      return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {};
-    }catch(e){ return {}; }
-  }
-  function writeMap(key, m){
-    try{ localStorage.setItem(key, JSON.stringify(m)); }catch(e){}
-  }
-
-  function loadWorkPref(){
-    workId = readMap(WORK_KEY)[deptId] || DEFAULT_WORK;
-  }
-  function saveWorkPref(){
-    const m = readMap(WORK_KEY);
-    m[deptId] = workId;
-    writeMap(WORK_KEY, m);
-  }
-  function loadWorkList(){
-    const list = readMap(WORK_LIST_KEY)[deptId];
-    works = (Array.isArray(list) && list.length) ? list : [{id: DEFAULT_WORK, name: '기본'}];
-  }
-  function saveWorkList(){
-    const m = readMap(WORK_LIST_KEY);
-    m[deptId] = works;
-    writeMap(WORK_LIST_KEY, m);
-  }
-  function workName(id){
-    for(let i = 0; i < works.length; i++) if(works[i].id === id) return works[i].name;
-    return id;
-  }
-
-  function adoptWorks(list, serverWork){
-    if(!Array.isArray(list)) return;
-    const clean = list
-      .filter(function(w){ return w && typeof w.id === 'string' && w.id; })
-      .map(function(w){ return {id: w.id, name: (typeof w.name === 'string' && w.name) ? w.name : w.id}; });
-    if(!clean.length) return;
-    works = clean;
-    saveWorkList();
-    // 고른 업무가 목록에서 사라졌으면 서버가 돌려준 업무를 따릅니다.
-    if(typeof serverWork === 'string' && serverWork && serverWork !== workId){
-      workId = serverWork;
-      saveWorkPref();
-    }
-    renderWorkSelect();
-  }
-
-  function renderWorkSelect(){
-    const wrap = document.getElementById('workWrap');
-    const grp = document.getElementById('workMenuGroup');
-    const sel = document.getElementById('workSelect');
-    const on = !!syncUrl;
-    if(wrap) wrap.style.display = on ? '' : 'none';
-    if(grp) grp.style.display = (on && canEdit()) ? '' : 'none';
-    if(!sel || !on) return;
-    sel.innerHTML = '';
-    works.forEach(function(w){
-      sel.appendChild(el('option',
-        Object.assign({value: w.id}, w.id === workId ? {selected: 'selected'} : {}),
-        [w.name]));
-    });
-  }
-
-  // 부서 전환과 같은 절차입니다. 저장된 내역을 먼저 그리고 서버 응답은 나중에 합칩니다.
-  async function switchWork(id){
-    if(!id || id === workId){ renderWorkSelect(); return; }
-    if(syncTimer){ clearTimeout(syncTimer); syncTimer = null; await pushRemoteState(); }
-    workId = id;
-    saveWorkPref();
-    loadBaseState();
-    remoteRev = null;
-    remoteUpdatedAt = '';
-    syncBlocked = false;
-    // 업무가 다르면 그룹 id 체계도 다르므로 접기 상태를 비웁니다.
-    collapsedIds = new Set();
-    doneOverride.clear();
-    saveViewPrefs();
-
-    const turn = ++deptSeq;
-    state = cachedDeptState();
-    pushHold = !!syncUrl;
-    syncStatus = syncUrl ? 'syncing' : 'idle';
-    syncPhase = state.groups.length ? 'check' : 'load';
-    syncStatusMessage = syncUrl ? '저장된 내용을 먼저 표시했습니다 · 서버에서 최신인지 확인 중...' : '';
-    suppressRemotePush = true;
-    try{ fullRender(); } finally { suppressRemotePush = false; }
-    renderSyncStatus();
-    renderWorkSelect();
-
-    await refreshFromServer(turn);
-    if(turn !== deptSeq) return;
-    renderWorkSelect();
-  }
-
-  async function addWork(){
-    const name = (prompt('추가할 업무 이름을 입력하세요.') || '').trim();
-    if(!name) return;
-    try{
-      const r = await deptAction({_action: 'createWork', _dept: deptId, _name: name});
-      if(Array.isArray(r.works)){ works = r.works; saveWorkList(); }
-      if(r.work) await switchWork(r.work);
-      else renderWorkSelect();
-    }catch(e){
-      alert('업무 추가에 실패했습니다: ' + e.message + String.fromCharCode(10) +
-        '목록을 서버 기준으로 다시 불러옵니다.');
-      await resyncLists();
-    }
-  }
-  async function renameWorkPrompt(){
-    const cur = workName(workId);
-    const name = (prompt('"' + cur + '" 업무의 새 이름을 입력하세요.', cur) || '').trim();
-    if(!name || name === cur) return;
-    try{
-      const r = await deptAction({_action: 'renameWork', _dept: deptId, _work: workId, _name: name});
-      if(Array.isArray(r.works)){ works = r.works; saveWorkList(); }
-      renderWorkSelect();
-    }catch(e){
-      alert('이름 변경에 실패했습니다: ' + e.message + String.fromCharCode(10) +
-        '목록을 서버 기준으로 다시 불러옵니다.');
-      await resyncLists();
-    }
-  }
-  async function removeWorkPrompt(){
-    if(workId === DEFAULT_WORK){ alert('기본 업무는 제거할 수 없습니다.'); return; }
-    const cur = workName(workId);
-    if(!confirm('"' + cur + '" 업무를 목록에서 제거할까요?\n\n' +
-      '데이터 시트는 구글 시트에 그대로 남습니다. 목록에서만 빠지므로 필요하면 되살릴 수 있습니다.')) return;
-    try{
-      const r = await deptAction({_action: 'removeWork', _dept: deptId, _work: workId});
-      if(Array.isArray(r.works)){ works = r.works; saveWorkList(); }
-      await switchWork(works[0].id);
-    }catch(e){
-      alert('제거에 실패했습니다: ' + e.message + String.fromCharCode(10) +
-        '목록을 서버 기준으로 다시 불러옵니다.');
-      await resyncLists();
-    }
-  }
-
-  // 로컬 보관도 업무까지 나눠 둡니다. 기본 업무는 예전 키를 그대로 써야
-  // 지금 브라우저에 쌓인 캐시가 버려지지 않습니다.
-  function deptDataKey(){
-    const base = (deptId && deptId !== DEFAULT_DEPT) ? STORAGE_KEY + '__' + deptId : STORAGE_KEY;
-    return (workId && workId !== DEFAULT_WORK) ? base + '__w_' + workId : base;
-  }
-
-  function adoptDepts(list, serverDept){
-    if(!Array.isArray(list)) return;
-    const clean = list
-      .filter(function(d){ return d && typeof d.id === 'string' && d.id; })
-      .map(function(d){ return {id: d.id, name: (typeof d.name === 'string' && d.name) ? d.name : d.id}; });
-    if(!clean.length) return;
-    depts = clean;
-    saveDeptList();
-    // 고른 부서가 목록에서 사라졌으면 서버가 돌려준 부서를 따릅니다.
-    if(typeof serverDept === 'string' && serverDept && serverDept !== deptId){
-      deptId = serverDept;
-      saveDeptPref();
-    }
-    renderDeptSelect();
-  }
-
-  function renderDeptSelect(){
-    const wrap = document.getElementById('deptWrap');
-    const grp = document.getElementById('deptMenuGroup');
-    const sel = document.getElementById('deptSelect');
-    // 부서는 구글 시트에 사는 개념이라 동기화가 연결돼 있을 때만 씁니다.
-    const on = !!syncUrl;
-    if(wrap) wrap.style.display = on ? '' : 'none';
-    // 관리 메뉴는 관리자만 씁니다. 조회 전용에서는 버튼이 전부 숨겨져
-    // 제목만 덩그러니 남으므로 그룹째 감춥니다.
-    if(grp) grp.style.display = (on && canEdit()) ? '' : 'none';
-    if(!sel || !on) return;
-    sel.innerHTML = '';
-    depts.forEach(function(d){
-      sel.appendChild(el('option',
-        Object.assign({value: d.id}, d.id === deptId ? {selected: 'selected'} : {}),
-        [d.name]));
-    });
-  }
-
-  async function switchDept(id){
-    if(!id || id === deptId){ renderDeptSelect(); return; }
-    // 이전 부서로 가려던 저장이 남아 있으면 먼저 보내고 바꿉니다.
-    if(syncTimer){ clearTimeout(syncTimer); syncTimer = null; await pushRemoteState(); }
-    deptId = id;
-    saveDeptPref();
-    // 업무는 부서 안에서만 의미가 있습니다. 부서를 바꾸면 그 부서에서 마지막으로
-    // 보던 업무로 옮겨 갑니다. (deptDataKey 가 업무까지 쓰므로 순서가 중요합니다)
-    loadWorkList();
-    loadWorkPref();
-    loadBaseState();
-    remoteRev = null;
-    remoteUpdatedAt = '';
-    syncBlocked = false;
-    // 부서가 다르면 그룹 id 체계도 다르므로 접기 상태를 비웁니다.
-    collapsedIds = new Set();
-    doneOverride.clear();
-    saveViewPrefs();
-
-    // 서버 왕복이 3초쯤 걸립니다. 그동안 이전 부서 내역을 그대로 두면 전환이
-    // 안 된 것처럼 보이므로, 이 브라우저에 남아 있는 그 부서 내역을 먼저 그립니다.
-    // 아직 서버를 못 읽었으니 업로드는 pushHold 로 미뤄 둡니다.
-    const turn = ++deptSeq;
-    state = cachedDeptState();
-    pushHold = !!syncUrl;
-    syncStatus = syncUrl ? 'syncing' : 'idle';
-    syncPhase = state.groups.length ? 'check' : 'load';
-    syncStatusMessage = syncUrl ? '저장된 내용을 먼저 표시했습니다 · 서버에서 최신인지 확인 중...' : '';
-    suppressRemotePush = true;
-    try{ fullRender(); } finally { suppressRemotePush = false; }
-    renderSyncStatus();
-    renderDeptSelect();
-    renderWorkSelect();
-
-    await refreshFromServer(turn);
-    if(turn !== deptSeq) return;
-    renderDeptSelect();
-    renderWorkSelect();
-  }
-
-  // 부서·업무 관리는 쓰기라서, 응답을 잃으면 적용됐는지 알 수 없습니다.
-  // Apps Script 는 응답을 다른 주소로 넘겨 주는 구조라 가끔 그 구간에서 404 가
-  // 나옵니다. 서버가 판단해서 돌려준 거절은 그대로 알리고, 본문조차 없는
-  // 전송 실패일 때만 한 번 더 보냅니다.
-  async function deptAction(body){
-    if(!syncUrl) throw new Error('동기화 연결이 없습니다');
-    const payload = JSON.stringify(Object.assign({_key: adminKey}, body));
-    let lastErr = null;
-    for(let attempt = 0; attempt < 2; attempt++){
-      if(attempt) await new Promise(function(r){ setTimeout(r, 1500); });
-      let res = null;
-      try{
-        res = await fetch(syncUrl, {
-          method: 'POST',
-          headers: {'Content-Type': 'text/plain;charset=utf-8'},
-          body: payload
-        });
-      }catch(e){ lastErr = e; continue; }
-      let r = {};
-      try{ r = await res.json(); }catch(e){ r = {}; }
-      // 서버가 이유를 적어 보냈으면 다시 보내도 같은 답입니다.
-      if(r && typeof r.error === 'string' && r.error) throw new Error(r.error);
-      if(res.ok && r.ok !== false) return r;
-      lastErr = new Error('HTTP ' + res.status);
-    }
-    throw lastErr || new Error('요청에 실패했습니다');
-  }
-
-  // 관리 동작이 실패하면 적용 여부가 불분명합니다. 서버 목록을 다시 받아
-  // 화면이 추측이 아니라 사실을 보여 주게 합니다. (데이터는 건드리지 않습니다)
-  async function resyncLists(){
-    try{ await fetchRemoteState(); }catch(e){}
-    renderDeptSelect();
-    renderWorkSelect();
-  }
-
-  async function addDept(){
-    const name = (prompt('추가할 부서 이름을 입력하세요.') || '').trim();
-    if(!name) return;
-    try{
-      const r = await deptAction({_action: 'createDept', _name: name});
-      if(Array.isArray(r.depts)) depts = r.depts;
-      if(r.dept) await switchDept(r.dept);
-      else renderDeptSelect();
-    }catch(e){
-      alert('부서 추가에 실패했습니다: ' + e.message + String.fromCharCode(10) +
-        '목록을 서버 기준으로 다시 불러옵니다.');
-      await resyncLists();
-    }
-  }
-  async function renameDeptPrompt(){
-    const cur = deptName(deptId);
-    const name = (prompt('"' + cur + '" 부서의 새 이름을 입력하세요.', cur) || '').trim();
-    if(!name || name === cur) return;
-    try{
-      const r = await deptAction({_action: 'renameDept', _dept: deptId, _name: name});
-      if(Array.isArray(r.depts)) depts = r.depts;
-      renderDeptSelect();
-    }catch(e){
-      alert('이름 변경에 실패했습니다: ' + e.message + String.fromCharCode(10) +
-        '목록을 서버 기준으로 다시 불러옵니다.');
-      await resyncLists();
-    }
-  }
-  async function removeDeptPrompt(){
-    if(depts.length <= 1){ alert('부서가 하나뿐이라 제거할 수 없습니다.'); return; }
-    const cur = deptName(deptId);
-    if(!confirm('"' + cur + '" 부서를 목록에서 제거할까요?\n\n' +
-      '데이터 시트는 구글 시트에 그대로 남습니다. 목록에서만 빠지므로 필요하면 되살릴 수 있습니다.')) return;
-    try{
-      const r = await deptAction({_action: 'removeDept', _dept: deptId});
-      if(Array.isArray(r.depts)) depts = r.depts;
-      await switchDept(depts[0].id);
-    }catch(e){
-      alert('제거에 실패했습니다: ' + e.message + String.fromCharCode(10) +
-        '목록을 서버 기준으로 다시 불러옵니다.');
-      await resyncLists();
-    }
-  }
+  function deptDataKey(){ return STORAGE_KEY; }
 
   /* ---------------- Google Sheets sync (optional) ---------------- */
   const SYNC_URL_KEY = 'wbs_sync_url_v1';
@@ -1630,14 +1281,6 @@
     // 지금 부서뿐 아니라 모든 부서의 기준을 비웁니다.
     clearAllBaseSnapshots();
     startPolling();
-    deptId = DEFAULT_DEPT;
-    depts = [{id: DEFAULT_DEPT, name: '기본'}];
-    saveDeptPref();
-    saveDeptList();
-    // 다른 시트면 업무 체계도 다릅니다.
-    workId = DEFAULT_WORK;
-    works = [{id: DEFAULT_WORK, name: '기본'}];
-    try{ localStorage.removeItem(WORK_KEY); localStorage.removeItem(WORK_LIST_KEY); }catch(e){}
     // 다른 시트는 열쇠 정책이 다를 수 있으므로 새로 물어봅니다.
     setAuthRequired(false);
     try{ localStorage.setItem(SYNC_URL_KEY, url); }catch(e){ console.warn('동기화 URL 저장 실패:', e); }
@@ -1655,19 +1298,11 @@
   }
 
   async function fetchRemoteState(){
-    // 어느 부서를 물어봤는지 기억해 둡니다. 부서를 바꾼 뒤 늦게 도착한 응답이
-    // 고른 부서를 예전 것으로 되돌려 놓는 일을 막습니다.
-    const asked = deptId + '/' + workId;
     const res = await fetch(syncUrlWithDept(), {method:'GET', cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
     const clean = sanitizeState(data);
     if(!clean) throw new Error('올바른 데이터 형식이 아닙니다');
-    const still = (asked === deptId + '/' + workId);
-    // 구버전 Code.gs는 depts 를 안 내려줍니다. 그때는 기본 부서 하나로만 동작합니다.
-    adoptDepts(data && data.depts, still ? (data && data.dept) : null);
-    // works 를 안 내려주는 구버전이면 기본 업무 하나로만 동작합니다.
-    if(still) adoptWorks(data && data.works, data && data.work);
     // 구버전은 authRequired 도 안 내려줍니다. 그때는 잠그지 않습니다.
     // 서버 응답이 최신 사실이므로 열쇠를 뺀 경우에도 자동으로 풀립니다.
     setAuthRequired(data && data.authRequired);
@@ -2085,7 +1720,8 @@
   let productFilter = '';   // '' 이면 전체
   const ASSIGNEE_FILTER_KEY = 'wbs_assignee_filter_v1';
   const SEARCH_FILTER_KEY = 'wbs_search_filter_v1';
-  let assigneeFilter = '';   // '' 이면 전체
+  // 여러 명을 고를 수 있습니다. 빈 배열이면 전체입니다.
+  let assigneeFilters = [];
   let searchText = '';
 
   function loadViewPrefs(){
@@ -2099,7 +1735,16 @@
       if(Array.isArray(ids)) collapsedIds = new Set(ids.filter(function(v){ return typeof v === 'string'; }));
     }catch(e){}
     try{ productFilter = localStorage.getItem(PRODUCT_FILTER_KEY) || ''; }catch(e){}
-    try{ assigneeFilter = localStorage.getItem(ASSIGNEE_FILTER_KEY) || ''; }catch(e){}
+    try{
+      const raw = localStorage.getItem(ASSIGNEE_FILTER_KEY) || '';
+      if(raw.charAt(0) === '['){
+        const list = JSON.parse(raw);
+        if(Array.isArray(list)) assigneeFilters = list.filter(function(v){ return typeof v === 'string' && v; });
+      } else if(raw){
+        // 한 명만 고를 수 있던 시절에 저장해 둔 값입니다.
+        assigneeFilters = [raw];
+      }
+    }catch(e){ assigneeFilters = []; }
     try{ searchText = localStorage.getItem(SEARCH_FILTER_KEY) || ''; }catch(e){}
     try{
       const raw = JSON.parse(localStorage.getItem(PERIOD_FILTER_KEY) || 'null');
@@ -2114,7 +1759,7 @@
       localStorage.setItem(GRID_COLLAPSED_KEY, JSON.stringify(Array.from(collapsedIds)));
       localStorage.setItem(PERIOD_FILTER_KEY, JSON.stringify(periodFilter));
       localStorage.setItem(PRODUCT_FILTER_KEY, productFilter);
-      localStorage.setItem(ASSIGNEE_FILTER_KEY, assigneeFilter);
+      localStorage.setItem(ASSIGNEE_FILTER_KEY, JSON.stringify(assigneeFilters));
       localStorage.setItem(SEARCH_FILTER_KEY, searchText);
       localStorage.setItem(ACTIVE_VIEW_KEY, activeView);
     }catch(e){}
@@ -2202,9 +1847,35 @@
     return String(g.product || '').trim() === productFilter;
   }
 
+  // 고른 사람 중 한 명이라도 맡고 있으면 보여 줍니다.
   function matchAssignee(t){
-    if(!assigneeFilter) return true;
-    return splitAssignees(t.assignee).indexOf(assigneeFilter) !== -1;
+    if(!assigneeFilters.length) return true;
+    const mine = splitAssignees(t.assignee);
+    for(let i = 0; i < mine.length; i++){
+      if(assigneeFilters.indexOf(mine[i]) !== -1) return true;
+    }
+    return false;
+  }
+
+  function toggleAssignee(name, on){
+    const i = assigneeFilters.indexOf(name);
+    if(on && i === -1) assigneeFilters.push(name);
+    else if(!on && i !== -1) assigneeFilters.splice(i, 1);
+    saveViewPrefs();
+    refreshViews();
+  }
+
+  function assigneeLabelText(){
+    if(!assigneeFilters.length) return '전체';
+    if(assigneeFilters.length === 1) return assigneeFilters[0];
+    return assigneeFilters[0] + ' 외 ' + (assigneeFilters.length - 1) + '명';
+  }
+
+  function closeAssigneePanel(){
+    const panel = document.getElementById('assigneePanel');
+    const btn = document.getElementById('btnAssigneeToggle');
+    if(panel) panel.classList.add('hidden');
+    if(btn) btn.setAttribute('aria-expanded', 'false');
   }
 
   // 그룹 이름으로도 찾을 수 있어야 그 그룹 전체를 볼 수 있습니다.
@@ -2217,12 +1888,13 @@
   }
 
   function anyFilterOn(){
-    return !!productFilter || !!assigneeFilter || !!searchText.trim();
+    return !!productFilter || assigneeFilters.length > 0 || !!searchText.trim();
   }
 
   function clearExtraFilters(){
     productFilter = '';
-    assigneeFilter = '';
+    assigneeFilters = [];
+    closeAssigneePanel();
     searchText = '';
     const s = document.getElementById('filterSearch');
     if(s) s.value = '';
@@ -2368,19 +2040,35 @@
       });
     }
 
-    const who = document.getElementById('filterAssignee');
-    if(who){
+    const whoLabel = document.getElementById('assigneeLabel');
+    if(whoLabel) whoLabel.textContent = assigneeLabelText();
+    const whoPanel = document.getElementById('assigneePanel');
+    if(whoPanel){
       const names = allAssignees();
       // 고른 담당자가 목록에서 사라져도 남겨 둡니다. 조용히 풀리면
       // 왜 아무것도 안 나오는지 알 수 없습니다.
-      if(assigneeFilter && names.indexOf(assigneeFilter) === -1) names.push(assigneeFilter);
-      who.innerHTML = '';
-      who.appendChild(el('option', Object.assign({value:''},
-        assigneeFilter ? {} : {selected:'selected'}), ['전체']));
-      names.forEach(function(a){
-        who.appendChild(el('option', Object.assign({value:a},
-          a === assigneeFilter ? {selected:'selected'} : {}), [a]));
-      });
+      assigneeFilters.forEach(function(a){ if(names.indexOf(a) === -1) names.push(a); });
+      whoPanel.innerHTML = '';
+      if(!names.length){
+        whoPanel.appendChild(el('div', {class:'who-empty'}, ['담당자가 아직 없습니다.']));
+      } else {
+        const all = el('label', {class:'who-row'});
+        // el() 은 값을 그대로 속성으로 넣습니다. null 을 주면 'null' 이 되어 체크됩니다.
+        all.appendChild(el('input', Object.assign({type:'checkbox',
+          onchange:function(){ assigneeFilters = []; saveViewPrefs(); refreshViews(); }},
+          assigneeFilters.length ? {} : {checked:'checked'})));
+        all.appendChild(el('span', {}, ['전체']));
+        whoPanel.appendChild(all);
+        whoPanel.appendChild(el('div', {class:'who-sep'}));
+        names.forEach(function(a){
+          const row = el('label', {class:'who-row'});
+          row.appendChild(el('input', Object.assign({type:'checkbox',
+            onchange:(function(name){ return function(e){ toggleAssignee(name, e.target.checked); }; })(a)},
+            assigneeFilters.indexOf(a) !== -1 ? {checked:'checked'} : {})));
+          row.appendChild(el('span', {}, [a]));
+          whoPanel.appendChild(row);
+        });
+      }
     }
     const box = document.getElementById('filterSearch');
     // 치고 있는 중에는 건드리지 않습니다. 입력이 잠깐 멈춘 사이에 다시 그리면
@@ -2395,7 +2083,7 @@
       const shown = view.rows.reduce(function(s, r){ return s + r.tasks.length; }, 0);
       let text = periodLabel();
       if(productFilter) text += ' · 제품 ' + productFilter;
-      if(assigneeFilter) text += ' · 담당자 ' + assigneeFilter;
+      if(assigneeFilters.length) text += ' · 담당자 ' + assigneeFilters.join(', ');
       if(searchText.trim()) text += ' · "' + searchText.trim() + '"';
       text += ' · 그룹 ' + view.rows.length + ' / 업무 ' + shown + '건';
       if(view.hiddenGroups || view.hiddenTasks){
@@ -3751,18 +3439,6 @@
   document.getElementById('btnCopyViewerLink').addEventListener('click', copyViewerLink);
   document.getElementById('btnAdminOn').addEventListener('click', enterAdminMode);
   document.getElementById('btnAdminOff').addEventListener('click', exitAdminMode);
-  document.getElementById('deptSelect').addEventListener('change', function(e){
-    switchDept(e.target.value);
-  });
-  document.getElementById('workSelect').addEventListener('change', function(e){
-    switchWork(e.target.value);
-  });
-  document.getElementById('btnWorkAdd').addEventListener('click', addWork);
-  document.getElementById('btnWorkRename').addEventListener('click', renameWorkPrompt);
-  document.getElementById('btnWorkRemove').addEventListener('click', removeWorkPrompt);
-  document.getElementById('btnDeptAdd').addEventListener('click', addDept);
-  document.getElementById('btnDeptRename').addEventListener('click', renameDeptPrompt);
-  document.getElementById('btnDeptRemove').addEventListener('click', removeDeptPrompt);
   document.getElementById('btnHolidays').addEventListener('click', function(){
     renderHolidayList();
     document.getElementById('holidayModal').classList.remove('hidden');
@@ -3866,11 +3542,27 @@
     saveViewPrefs();
     refreshViews();
   });
-  document.getElementById('filterAssignee').addEventListener('change', function(e){
-    assigneeFilter = e.target.value;
-    saveViewPrefs();
-    refreshViews();
-  });
+  (function(){
+    const toggle = document.getElementById('btnAssigneeToggle');
+    const panel = document.getElementById('assigneePanel');
+    toggle.addEventListener('click', function(e){
+      e.stopPropagation();
+      const willOpen = panel.classList.contains('hidden');
+      panel.classList.toggle('hidden', !willOpen);
+      toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+    document.addEventListener('click', function(e){
+      if(panel.classList.contains('hidden')) return;
+      // 체크할 때마다 목록을 다시 그리므로 e.target 이 DOM에서 빠집니다.
+      // 그러면 panel.contains() 가 false 가 되어 팝업이 닫혀 버립니다.
+      if(!document.contains(e.target)) return;
+      if(panel.contains(e.target) || toggle.contains(e.target)) return;
+      closeAssigneePanel();
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key === 'Escape') closeAssigneePanel();
+    });
+  })();
   // 입력할 때마다 표를 다시 그리면 글자가 밀립니다. 잠깐 멈출 때 반영합니다.
   let searchTimer = null;
   document.getElementById('filterSearch').addEventListener('input', function(e){
@@ -3941,9 +3633,6 @@
   // 서버 응답이 오면 그때 합칩니다. (부서 전환과 같은 방식입니다)
   function bootState(){
     loadSyncUrl();
-    loadDeptList();
-    loadWorkList();
-    loadWorkPref();
     // 서버를 못 읽어도 지난번 기준이 있으면 나중에 합칠 수 있습니다.
     loadBaseState();
     if(!syncUrl){
@@ -3968,7 +3657,6 @@
   loadHolidayStorage();
   loadGanttPref();
   loadViewPrefs();
-  loadDeptPref();
   loadAdminKey();
   // 입력 중이라 미뤄 둔 서버 변경을, 칸을 벗어나는 즉시 화면에 반영합니다.
   document.getElementById('wbsTable').addEventListener('focusout', function(){
@@ -4007,15 +3695,11 @@
   suppressRemotePush = true;
   try{ fullRender(); } finally { suppressRemotePush = false; }
   renderSyncStatus();
-  renderDeptSelect();
-  renderWorkSelect();
   renderAuthUi();
 
   // 여기서부터는 기다려도 화면이 비어 있지 않습니다.
   refreshFromServer(deptSeq).then(function(){
     renderSyncStatus();
-    renderDeptSelect();
-    renderWorkSelect();
     renderAuthUi();
     startPolling();
   });

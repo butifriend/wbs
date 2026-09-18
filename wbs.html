@@ -1395,6 +1395,8 @@
     try{ localStorage.setItem(DOC_ID_KEY, id); }catch(e){}
   }
 
+  // 안내문 줄바꿈. 문자열 안에 직접 넣으면 패치 과정에서 자꾸 깨집니다.
+  const BR = String.fromCharCode(10);
   function nowKST(){ return new Date().toLocaleTimeString('ko-KR'); }
   function fmtRemoteTime(s){
     if(!s) return '시각 미상';
@@ -1637,13 +1639,32 @@
       pushHold = false;
       syncBlocked = false;
       if(remote.exists === false && state.groups.length){
-        // 아직 문서가 없는데 화면에는 내용이 있습니다. 옮겨 오는 첫 저장입니다.
-        // 여기서 빈 서버 내용을 받아들이면 방금 가져온 데이터가 사라집니다.
+        // 아직 문서가 없는데 화면에는 내용이 있습니다. 여기서 빈 서버 내용을
+        // 받아들이면 방금 가져온 데이터가 사라집니다.
         if(!canEdit()){
           // 올릴 권한이 없으면 그대로 둡니다. "저장 중"에 멈춰 있으면 안 됩니다.
           syncStatus = 'error';
           syncStatusMessage = '서버에 아직 내용이 없습니다. 화면 내용은 이 브라우저에만 있습니다 · ' +
-            '기능모음 → 관리자 모드에서 로그인하면 올라갑니다';
+            '기능모음 → 관리자 로그인 후 올릴 수 있습니다';
+          renderSyncStatus();
+          return;
+        }
+        // 팀 데이터를 처음 만드는 일이라 묻고 진행합니다. 연결 없이 쓰던
+        // 브라우저에는 예시 데이터가 들어 있는데, 그게 그대로 올라가면
+        // 팀 전체가 예시를 실제 데이터로 보게 됩니다.
+        syncStatus = 'idle'; renderSyncStatus();
+        const push = await showChoiceModal({
+          title: '서버에 아직 내용이 없습니다',
+          message:
+            '이 화면의 내용을 팀 데이터로 올릴까요?' + BR + BR +
+            '화면: 그룹 '+state.groups.length+'개 / 업무 '+countTasks(state)+'개' + BR + BR +
+            '연결 없이 둘러보던 브라우저라면 예시 데이터일 수 있습니다.',
+          confirmLabel: '이 내용을 올리기',
+          cancelLabel: '올리지 않기'
+        });
+        if(!push){
+          syncStatus = 'error';
+          syncStatusMessage = '서버에 아직 내용이 없습니다 · 화면 내용은 이 브라우저에만 있습니다';
           renderSyncStatus();
           return;
         }

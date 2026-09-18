@@ -35,7 +35,9 @@
     font-family: var(--font-sans);
     font-size:14px;
   }
-  .wrap{max-width:1500px; margin:0 auto; padding:24px 20px 80px;}
+  /* 넓은 화면에서는 좌우를 거의 다 씁니다. 표가 가로로 길어서 여백보다
+     칸 하나가 더 보이는 편이 낫습니다. */
+  .wrap{max-width:1920px; margin:0 auto; padding:24px 14px 80px;}
   h1{font-size:22px; margin:0 0 4px;}
   .desc{color:var(--sub); font-size:13px; margin:0 0 20px; line-height:1.6;}
   .panel{background:var(--panel); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:16px; margin-bottom:16px;}

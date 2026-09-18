@@ -129,6 +129,12 @@
   .who-panel .who-row input{margin:0; cursor:pointer;}
   .who-panel .who-sep{height:1px; background:var(--border); margin:5px 2px;}
   .who-panel .who-empty{padding:8px 6px; font-size:12px; color:var(--sub);}
+  .login-input{
+    width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px;
+    background:var(--panel); color:var(--text); font:inherit; box-sizing:border-box;
+  }
+  .login-input:focus{border-color:var(--accent); outline:none;}
+  .login-err{min-height:18px; margin-top:8px; font-size:12px; color:var(--danger);}
   .filter-reset{font-size:11.5px; padding:3px 8px;}
   .filter-reset.hidden{display:none;}
 
@@ -427,7 +433,7 @@
       <div class="menu-panel hidden" id="menuPanel">
         <div class="menu-group">
           <div class="menu-label">권한</div>
-          <button id="btnAdminOn">관리자 모드 (구글 로그인)</button>
+          <button id="btnAdminOn">관리자 로그인</button>
           <button id="btnAdminOff">조회 전용으로 전환</button>
         </div>
         <div class="menu-group">
@@ -562,6 +568,21 @@
         <h2>타임라인</h2>
       </div>
       <div id="timelineInner"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="loginModal">
+  <div class="modal" style="width:360px;">
+    <h2>관리자 로그인</h2>
+    <p style="font-size:12px; color:var(--sub); line-height:1.6; margin-top:-6px;">
+      편집하려면 관리자 비밀번호가 필요합니다. 조회만 하실 때는 로그인하지 않아도 됩니다.
+    </p>
+    <input type="password" id="loginPw" class="login-input" placeholder="관리자 비밀번호" autocomplete="current-password">
+    <div id="loginErr" class="login-err"></div>
+    <div class="modal-footer">
+      <button class="small" id="loginCancel">취소</button>
+      <button class="primary small" id="loginGo">로그인</button>
     </div>
   </div>
 </div>
@@ -891,8 +912,8 @@
       badge.setAttribute('data-role', authUser ? 'admin' : 'viewer');
       badge.textContent = authUser ? '관리자' : '조회 전용';
       badge.title = authUser
-        ? (authUser.email || '') + ' 로 로그인됨 · 편집한 내용이 저장됩니다'
-        : '조회만 가능합니다. 기능모음 → 관리자 모드에서 구글 로그인하세요';
+        ? '관리자로 로그인됨 · 편집한 내용이 저장됩니다'
+        : '조회만 가능합니다. 편집하려면 기능모음 → 관리자 로그인';
     }
     const on = document.getElementById('btnAdminOn');
     const off = document.getElementById('btnAdminOff');
@@ -900,15 +921,48 @@
     if(off) off.style.display = authUser ? '' : 'none';
   }
 
-  async function enterAdminMode(){
+  // 로그인 아이디는 정해져 있습니다. 실제 메일함이 아니라 계정 이름으로만 씁니다.
+  const ADMIN_EMAIL = 'admin@douzone.com';
+
+  function openLoginModal(){
+    const pw = document.getElementById('loginPw');
+    const err = document.getElementById('loginErr');
+    if(pw) pw.value = '';
+    if(err) err.textContent = '';
+    document.getElementById('loginModal').classList.remove('hidden');
+    if(pw) setTimeout(function(){ pw.focus(); }, 0);
+  }
+  function closeLoginModal(){
+    document.getElementById('loginModal').classList.add('hidden');
+  }
+
+  function enterAdminMode(){ openLoginModal(); }
+
+  async function submitLogin(){
+    const pwEl = document.getElementById('loginPw');
+    const err = document.getElementById('loginErr');
+    const pw = (pwEl.value || '');
+    if(!pw){ err.textContent = '비밀번호를 입력해주세요.'; pwEl.focus(); return; }
+    err.textContent = '확인 중...';
     const fb = await firebaseReady();
-    if(!fb){ alert('로그인 기능을 불러오지 못했습니다. 네트워크를 확인해주세요.'); return; }
+    if(!fb){ err.textContent = '로그인 기능을 불러오지 못했습니다. 네트워크를 확인해주세요.'; return; }
     try{
-      await fb.signInWithPopup(fb.auth, new fb.GoogleAuthProvider());
-      // 실제 편집 권한은 보안 규칙이 정합니다. 명단에 없으면 저장할 때 거부됩니다.
+      await fb.signInWithEmailAndPassword(fb.auth, ADMIN_EMAIL, pw);
+      closeLoginModal();
     }catch(e){
-      if(e && (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request')) return;
-      alert('로그인에 실패했습니다: ' + ((e && e.message) || e));
+      const code = (e && e.code) || '';
+      // 어느 쪽이 틀렸는지 알려 주지 않는 편이 안전하고, 어차피 아이디는 하나뿐입니다.
+      if(code === 'auth/invalid-credential' || code === 'auth/wrong-password' ||
+         code === 'auth/user-not-found' || code === 'auth/invalid-email'){
+        err.textContent = '비밀번호가 올바르지 않습니다.';
+      } else if(code === 'auth/too-many-requests'){
+        err.textContent = '시도가 너무 잦습니다. 잠시 뒤 다시 해주세요.';
+      } else if(code === 'auth/operation-not-allowed'){
+        err.textContent = '이메일/비밀번호 로그인이 꺼져 있습니다. Firebase 콘솔에서 켜주세요.';
+      } else {
+        err.textContent = '로그인에 실패했습니다: ' + ((e && e.message) || e);
+      }
+      pwEl.select();
     }
   }
 
@@ -922,8 +976,8 @@
   function noteWriteDenied(){
     syncBlocked = true;
     syncStatus = 'error';
-    syncStatusMessage = '이 계정에는 편집 권한이 없습니다 (' + ((authUser && authUser.email) || '') + '). ' +
-      '관리자에게 권한을 요청하거나 기능모음 → 조회 전용으로 전환 을 눌러주세요.';
+    syncStatusMessage = '이 계정에는 편집 권한이 없습니다. 보안 규칙의 관리자 계정과 다릅니다 · ' +
+      '기능모음 → 조회 전용으로 전환 을 눌러주세요.';
     renderSyncStatus();
   }
 
@@ -995,8 +1049,7 @@
           getDoc: fsMod.getDoc,
           onSnapshot: fsMod.onSnapshot,
           runTransaction: fsMod.runTransaction,
-          GoogleAuthProvider: authMod.GoogleAuthProvider,
-          signInWithPopup: authMod.signInWithPopup,
+          signInWithEmailAndPassword: authMod.signInWithEmailAndPassword,
           signOut: authMod.signOut,
           onAuthStateChanged: authMod.onAuthStateChanged
         };
@@ -1534,7 +1587,7 @@
     if(!docId) return;
     if(!canEdit()){
       alert('조회 전용입니다.' + String.fromCharCode(10) +
-        '기능모음 → 관리자 모드에서 구글 로그인해주세요.');
+        '기능모음 → 관리자 로그인 에서 비밀번호를 입력해주세요.');
       return;
     }
     clearTimeout(syncTimer);
@@ -3593,6 +3646,12 @@
   });
   document.getElementById('btnCopyViewerLink').addEventListener('click', copyViewerLink);
   document.getElementById('btnAdminOn').addEventListener('click', enterAdminMode);
+  document.getElementById('loginGo').addEventListener('click', submitLogin);
+  document.getElementById('loginCancel').addEventListener('click', closeLoginModal);
+  document.getElementById('loginPw').addEventListener('keydown', function(e){
+    if(e.key === 'Enter') submitLogin();
+  });
+  wireOverlayClickToClose(document.getElementById('loginModal'));
   document.getElementById('btnAdminOff').addEventListener('click', exitAdminMode);
   document.getElementById('btnProducts').addEventListener('click', function(){
     renderProductModal();

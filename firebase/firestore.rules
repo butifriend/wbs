@@ -4,8 +4,8 @@ rules_version = '2';
 //
 // 읽기: 문서 ID 를 아는 사람이면 됩니다. 지금 쓰던 "링크를 받은 사람만" 과 같은 수준입니다.
 //       목록 조회(list)는 막아 두어, 앱 설정값만 가지고 문서 ID 를 훑어볼 수 없게 합니다.
-// 쓰기: 아래 명단에 올린 구글 계정만. 예전의 공유 열쇠와 달리 관리자 PC 에서
-//       꺼내 갈 수 있는 비밀이 없습니다.
+// 쓰기: 정해 둔 관리자 계정(admin@douzone.com)으로 로그인했을 때만.
+//       비밀번호는 Firebase 가 보관하며 화면 코드에는 들어가지 않습니다.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -26,20 +26,10 @@ service cloud.firestore {
   }
 }
 
+// 콘솔에서 만든 이메일/비밀번호 계정은 메일 인증을 거치지 않아
+// email_verified 가 거짓입니다. 그래서 그 조건은 넣지 않습니다.
+// 대신 아이디를 하나로 못박아 두었습니다.
 function isAdmin() {
   return request.auth != null
-      && request.auth.token.email_verified == true
-      && request.auth.token.email in [
-           // ↓↓↓ 편집을 허용할 구글 계정을 여기에 적으세요 (따옴표 포함, 쉼표로 구분)
-           'admin@example.com'
-           // , 'another@example.com'
-         ];
+      && request.auth.token.email == 'admin@douzone.com';
 }
-
-// 회사 도메인 전체에 편집을 열고 싶다면 위 isAdmin() 을 아래로 바꾸세요.
-//
-// function isAdmin() {
-//   return request.auth != null
-//       && request.auth.token.email_verified == true
-//       && request.auth.token.email.matches('.*@회사도메인[.]com');
-// }

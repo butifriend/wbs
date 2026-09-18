@@ -24,6 +24,9 @@
     --st-progress:#4c7a50; --st-progress-bg:#e7f0e7; --st-progress-mid:#7fbd84;
     --st-hold:#c1454b; --st-hold-bg:#fbe9ea; --st-hold-mid:#dd7e83;
     --st-plan:#6b7280; --st-plan-bg:#eef0f3; --st-plan-mid:#a4aab7;
+    /* 달과 달 사이에 긋는 세로선. 타임라인 탭의 진한 세로선(--sub 30%)과 같은 톤이라
+       주 사이의 --border 보다 눈에 띄게 어둡습니다. */
+    --grid-month: rgba(38,38,38,.3);
     --shadow: 0 1px 3px rgba(43,49,64,.06), 0 1px 2px rgba(43,49,64,.05);
   }
   *{box-sizing:border-box;}
@@ -381,6 +384,10 @@
   .gantt-row-group td.sticky-c1, .gantt-row-group td.sticky-c2{background:var(--group-bg); color:var(--group-text);}
   .gantt-row-group td.gantt-group-title{background:var(--group-bg); color:var(--group-text); text-align:left; padding-left:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .gantt-week-th.current-week{color:var(--danger);}
+  /* 달이 바뀌는 자리를 주 사이보다 진하게 긋습니다.
+     테두리가 겹칠 때는 왼쪽 칸의 오른쪽 선이 이기므로, 다음 달의 첫 주가 아니라
+     이번 달의 '마지막' 주에 겁니다. 왼쪽에 걸면 옆 칸 선에 가려집니다. */
+  .gantt-table th.month-end, .gantt-table td.month-end{border-right:1px solid var(--grid-month);}
   /* 구분별 색 — 타임라인 탭과 같은 값을 씁니다(JS의 CATEGORY_COLORS).
      기획·작성 노랑 / 검토 초록 / 수정 핑크 / 보고 파랑 / 그 외 회색 */
   td.gantt-cell[data-category]{color:var(--text); font-size:0; background:#f2f2f2;}
@@ -2868,18 +2875,27 @@
       const m = weeks[i].start.getMonth();
       let span=0;
       while(i+span<weeks.length && weeks[i+span].start.getMonth()===m) span++;
-      monthRow.appendChild(el('th', {colspan:String(span)}, [(m+1)+'월']));
+      // 마지막 달 오른쪽은 상태 열과의 경계라 진하게 하지 않습니다.
+      const last = i+span >= weeks.length;
+      monthRow.appendChild(el('th', Object.assign({colspan:String(span)},
+        last ? {} : {class:'month-end'}), [(m+1)+'월']));
       i+=span;
     }
     monthRow.appendChild(el('th', {rowspan:'2'}, ['상태']));
     thead.appendChild(monthRow);
 
+    // 그 주가 그 달의 마지막 주인지. 달이 바뀌는 자리에 진한 선을 긋습니다.
+    function endsMonth(idx){
+      return idx+1 < weeks.length && weeks[idx+1].start.getMonth() !== weeks[idx].start.getMonth();
+    }
+
     const weekRow = el('tr');
     const wCounters = {};
-    weeks.forEach(function(w){
+    weeks.forEach(function(w, idx){
       const key = w.start.getFullYear()+'-'+w.start.getMonth();
       wCounters[key] = (wCounters[key]||0)+1;
-      weekRow.appendChild(el('th', {class:'gantt-week-th'+(isCurrentWeek(w)?' current-week':'')}, [wCounters[key]+'w']));
+      weekRow.appendChild(el('th', {class:'gantt-week-th'+(isCurrentWeek(w)?' current-week':'')
+        +(endsMonth(idx)?' month-end':'')}, [wCounters[key]+'w']));
     });
     thead.appendChild(weekRow);
     table.appendChild(thead);
@@ -2907,9 +2923,10 @@
         const t = item.t;
         const ttr = el('tr', {class:'gantt-row-task'});
         ganttLabelCells((gi+1)+'.'+(ti+1), t.category, t.detail).forEach(function(td){ ttr.appendChild(td); });
-        weeks.forEach(function(w){
+        weeks.forEach(function(w, idx){
           const active = weekOverlaps(w, t.start, t.end);
-          const td = el('td', {class:'gantt-cell'+(isCurrentWeek(w)?' current-week':'')});
+          const td = el('td', {class:'gantt-cell'+(isCurrentWeek(w)?' current-week':'')
+            +(endsMonth(idx)?' month-end':'')});
           if(active) td.setAttribute('data-category', t.category || '기타');
           if(active) td.title = (t.category?t.category+' · ':'')+(t.detail||'')+' ('+fmtDisplay(t.start)+' ~ '+fmtDisplay(t.end)+', '+t.md+'MD)';
           ttr.appendChild(td);

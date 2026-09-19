@@ -381,7 +381,9 @@
   #ganttSection h2{font-size:16px; margin:0;}
   .gantt-collapsed-note{font-weight:400; font-size:11px; opacity:.65;}
   .gantt-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:8px;}
-  .gantt-table{border-collapse:collapse; font-size:11.5px; table-layout:fixed;}
+  /* min-width 1340px 은 WBS 표(열 10개)에 맞춰 둔 값입니다. 간트는 주 칸 수에
+     따라 폭이 정해지므로 그 값을 물려받으면 좁은 화면에서 공연히 넘칩니다. */
+  .gantt-table{border-collapse:collapse; font-size:11.5px; table-layout:fixed; min-width:0;}
   .gantt-table col.g-col-no{width:44px;}
   .gantt-table col.g-col-cat{width:66px;}
   .gantt-table col.g-col-detail{width:220px;}
@@ -2920,6 +2922,19 @@
     ];
   }
 
+  // 주 칸은 최소 너비만 지키고, 자리가 남으면 남는 만큼 나눠 가져
+  // 화면 너비를 채웁니다. 조회기간이 길면 예전처럼 가로로 넘칩니다.
+  // box 는 아직 비어 있어야 합니다(내용을 넣기 전에 재야 자리 폭이 나옵니다).
+  const WEEK_W_MIN = 30;
+  function fitWeekWidth(box, fixedPx, weekCount){
+    if(!box || !weekCount) return WEEK_W_MIN;
+    // 탭이 숨어 있으면 폭이 0 으로 나옵니다. 그때는 최소 너비로 둡니다.
+    const avail = box.clientWidth - fixedPx;
+    if(!(avail > 0)) return WEEK_W_MIN;
+    const w = Math.floor(avail / weekCount);
+    return w < WEEK_W_MIN ? WEEK_W_MIN : w;
+  }
+
   function renderGantt(){
     const container = document.getElementById('ganttInner');
     container.innerHTML = '';
@@ -2937,12 +2952,15 @@
     const maxEnd = validEnds.slice().sort().slice(-1)[0];
     const weeks = buildWeeks(minStart, maxEnd);
 
+    // 순번 44 + 구분 66 + 상세업무 220 + 상태 60. CSS 의 col 규칙과 같은 값입니다.
+    const weekW = fitWeekWidth(container, 44 + 66 + 220 + 60, weeks.length);
+
     const table = el('table', {class:'gantt-table'});
     const colgroup = el('colgroup');
     colgroup.appendChild(el('col', {class:'g-col-no'}));
     colgroup.appendChild(el('col', {class:'g-col-cat'}));
     colgroup.appendChild(el('col', {class:'g-col-detail'}));
-    weeks.forEach(function(){ colgroup.appendChild(el('col', {class:'g-col-week'})); });
+    weeks.forEach(function(){ colgroup.appendChild(el('col', {class:'g-col-week', style:'width:' + weekW + 'px;'})); });
     colgroup.appendChild(el('col', {class:'g-col-status'}));
     table.appendChild(colgroup);
 
@@ -3041,7 +3059,6 @@
   const RM_NAME_W = 150;   // 좌측 그룹 이름 칸 너비(px)
   const RM_ROW_H = 38;     // 레인 안에서 막대 한 줄 높이(px)
   const RM_LABEL_W = 96;   // 막대 위 라벨이 차지한다고 보는 최소 너비(px)
-  const RM_WEEK_W = 30;    // 주 칸 너비(px) — 모든 주가 같은 너비
 
   function renderTimeline(){
     const box = document.getElementById('timelineInner');
@@ -3094,7 +3111,9 @@
         cur.setMonth(cur.getMonth() + 1);
       }
     })();
-    const trackW = weekCols.length * RM_WEEK_W;
+    // .rm-scroll 의 테두리 1px 씩과 좌측 그룹 이름 칸을 뺀 나머지를 나눠 씁니다.
+    const weekW = fitWeekWidth(box, RM_NAME_W + 2, weekCols.length);
+    const trackW = weekCols.length * weekW;
 
     // 날짜 → x 좌표와 그 날 하루가 차지하는 폭을 미리 계산해 둡니다.
     const xByDay = new Array(totalDays);
@@ -3104,8 +3123,8 @@
       for(let k = 0; k < c.days; k++){
         const off = base + k;
         if(off < 0 || off >= totalDays) continue;
-        xByDay[off] = Math.round(i * RM_WEEK_W + (k / c.days) * RM_WEEK_W);
-        dayWByDay[off] = RM_WEEK_W / c.days;
+        xByDay[off] = Math.round(i * weekW + (k / c.days) * weekW);
+        dayWByDay[off] = weekW / c.days;
       }
     });
     function xOf(d){
@@ -3116,7 +3135,7 @@
     }
     function dayWOf(d){
       const off = Math.round((d - from) / DAY);
-      if(off < 0 || off >= totalDays) return RM_WEEK_W / 7;
+      if(off < 0 || off >= totalDays) return weekW / 7;
       return dayWByDay[off];
     }
 
@@ -3140,10 +3159,10 @@
 
     // 주 칸은 전부 같은 너비입니다.
     weekCols.forEach(function(c, i){
-      const x = i * RM_WEEK_W;
+      const x = i * weekW;
       wRow.appendChild(el('div', {
         class:'rm-w' + (today >= c.start && today <= c.end ? ' current' : ''),
-        style:'left:' + x + 'px; width:' + RM_WEEK_W + 'px;'
+        style:'left:' + x + 'px; width:' + weekW + 'px;'
       }, [c.label]));
       if(i > 0) weekStarts.push(x);
     });
@@ -3155,7 +3174,7 @@
         const key = keyOf(weekCols[i]);
         let j = i;
         while(j < weekCols.length && keyOf(weekCols[j]) === key) j++;
-        const x = i * RM_WEEK_W, w = (j - i) * RM_WEEK_W;
+        const x = i * weekW, w = (j - i) * weekW;
         const props = {
           class: cls,
           style: 'left:' + (x + inset) + 'px; width:' + Math.max(0, w - inset * 2) + 'px;'
@@ -3763,6 +3782,15 @@
       }
     });
   })();
+
+  // 창 크기가 바뀌면 주 칸 너비를 다시 잡아야 합니다. WBS 표는 칸 너비가
+  // CSS 로 정해져 있어 다시 그릴 필요가 없습니다.
+  let viewResizeTimer = null;
+  window.addEventListener('resize', function(){
+    if(activeView !== 'gantt' && activeView !== 'timeline') return;
+    clearTimeout(viewResizeTimer);
+    viewResizeTimer = setTimeout(renderActiveView, 150);
+  });
 
   // A draggable <tr> (used for row reordering) blocks native text-selection drags on
   // its input children in Chromium regardless of the input's own draggable attribute —

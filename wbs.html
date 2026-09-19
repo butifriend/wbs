@@ -29,6 +29,8 @@
     /* 달과 달 사이에 긋는 세로선. 타임라인 탭의 진한 세로선(--sub 30%)과 같은 톤이라
        주 사이의 --border 보다 눈에 띄게 어둡습니다. */
     --grid-month: rgba(38,38,38,.3);
+    /* 제목 앞 아이콘 크기와 글자와의 간격. 아래 설명 줄도 이 값만큼 들여씁니다. */
+    --title-icon:26px; --title-gap:9px;
     --shadow: 0 1px 3px rgba(43,49,64,.06), 0 1px 2px rgba(43,49,64,.05);
   }
   *{box-sizing:border-box;}
@@ -40,10 +42,13 @@
   /* 넓은 화면에서는 좌우를 거의 다 씁니다. 표가 가로로 길어서 여백보다
      칸 하나가 더 보이는 편이 낫습니다. */
   .wrap{max-width:1920px; margin:0 auto; padding:24px 14px 80px;}
-  h1{font-size:22px; margin:0 0 4px; display:flex; align-items:center; gap:9px;}
-  .app-icon{flex:0 0 auto; width:26px; height:26px; line-height:0;}
+  h1{font-size:22px; margin:0 0 4px; display:flex; align-items:center; gap:var(--title-gap);}
+  .app-icon{flex:0 0 auto; width:var(--title-icon); height:var(--title-icon); line-height:0;}
   .app-icon svg{width:100%; height:100%; display:block;}
-  .desc{color:var(--sub); font-size:13px; margin:0 0 20px; line-height:1.6;}
+  /* 설명 줄은 제목 글자와 같은 지점에서 시작합니다. 아이콘 폭 + 간격만큼
+     들여쓰기가 :root 의 값을 따라가므로 아이콘을 키워도 어긋나지 않습니다. */
+  .desc{color:var(--sub); font-size:13px; margin:0 0 20px; line-height:1.6;
+        padding-left:calc(var(--title-icon) + var(--title-gap));}
   .panel{background:var(--panel); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:16px; margin-bottom:16px;}
   .toolbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px;}
   button{
